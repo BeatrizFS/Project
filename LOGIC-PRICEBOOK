@@ -1,0 +1,44 @@
+private static Product__c getProduct(String productReference) {
+    List<Product__c> products = [
+        SELECT Id,
+               Key__c,
+               Pricebook__c
+        FROM Product__c
+        WHERE Key__c = :productReference
+        LIMIT 1
+    ];
+
+    if (products.isEmpty()) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            'Product with reference ' + productReference + ' not found.'
+        );
+    }
+
+    Product__c product = products[0];
+
+    if (product.Pricebook__c == null) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            'Pricebook is not configured for product ' + productReference + '.'
+        );
+    }
+
+    return product;
+}
+
+Product__c product = getProduct(request.product_reference);
+
+Id pricebookId = product.Pricebook__c;
+
+Map<String, Benefit__c> benefitsByReference =
+    getBenefitsByExternalReference(request);
+
+Map<String, PricebookEntry> pricebookEntriesByBenefit =
+    getPricebookEntriesByBenefitReference(
+        benefitsByReference,
+        pricebookId,
+        currencyIsoCode
+    );
