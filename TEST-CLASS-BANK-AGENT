@@ -1,0 +1,797 @@
+@isTest
+private class Test_WebportalSalesBanks_VEXP {
+
+    private static String token = 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InhobHdPb3h2M1YwbmpiSTU1eDlEVCJ9.eyJtaSI6ZmFsc2UsImlzcyI6Imh0dHBzOi8vYXV0aC1zdGcuYXBpLmF4YXBhcnRuZXJzLmNvbS8iLCJzdWIiOiJhRWhZNGN5UzdpS00wbHVITU1XRlRYbk5ybjFBMVA2Q0BjbGllbnRzIiwiYXVkIjoiaHR0cHM6Ly9hcGktdGVzdC5heGEtYXNzaXN0YW5jZS5jb20vIiwiaWF0IjoxNzg1MTgxNTMwLCJleHAiOjE3ODUxODUxMzAsInNjb3BlIjoidXJuOmF4YS5wYXJ0bmVycy5zYWxlcy50cmF2ZWwucHJvZHVjdHMuYmVuZWZpdHMucmVhZF9vbmx5IHVybjpheGEucGFydG5lcnMuc2FsZXMudHJhdmVsLnByb2R1Y3RzLnJlYWRfb25seSB1cm46YXhhLnBhcnRuZXJzLnNwZWNpZmljLnZpc2FnYXRld2F5LmFjY291bnRfcmVjb3ZlcnlfcmVxdWVzdHMud3JpdGUgdXJuOmF4YS5wYXJ0bmVycy5zcGVjaWZpYy52aXNhZ2F0ZXdheS5leHBlY3RlZF9kb2N1bWVudHMucmVhZF9vbmx5IHVybjpheGEucGFydG5lcnMuc3BlY2lmaWMudmlzYWdhdGV3YXkuZnJlcXVlbnRseV9hc2tlZF9xdWVzdGlvbnMucmVhZF9vbmx5IHVybjpheGEucGFydG5lcnMuc3BlY2lmaWMudmlzYWdhdGV3YXkuZnJlcXVlbnRseV9hc2tlZF9xdWVzdGlvbnMud3JpdGUgdXJuOmF4YS5wYXJ0bmVycy5zcGVjaWZpYy52aXNhZ2F0ZXdheS5wcm9kdWN0cy5iZW5lZml0cy5yZWFkX29ubHkgdXJuOmF4YS5wYXJ0bmVycy5zcGVjaWZpYy52aXNhZ2F0ZXdheS5wcm9kdWN0cy5yZWFkX29ubHkgdXJuOmF4YS5wYXJ0bmVycy5zYWxlcy5lbnRlcnByaXNlLnRyYW5zdmVyc2FsLmJlbmVmaXRzX2NvbmZpZ3VyYXRpb24uYmFua3MucmVhZF9vbmx5IiwiZ3R5IjoiY2xpZW50LWNyZWRlbnRpYWxzIiwiYXpwIjoiYUVoWTRjeVM3aUtNMGx1SE1NV0ZUWG5Ocm4xQTFQNkMifQ==.QYpYLyKCqr_cRrHoe9mvQULoPnybfY6FMys-YTGypnXYf4aGLKW21Rt3_nQcd1xAQnKfrbXLi-P2fSu81-ueKDGNaVeW9raiqoc4A60gGH8QIQdJEe97i9Un1mnayQFJa95kvrJjoQW01D_VdPzt-BIbS9exoXPyXlcJqcMIbob5aARRxfveqrqSEr5f24nPoVRR6K3mISvJ5iMsZA6Sl1OptByj6Zo7TrjL6LDD_5REOT7r1XHRaF0BzDxLb6RCL77LYWY1u_tqlY7Uzav_KtFNcYkjvYLTL_MsaG5DsCZKIqqhQW4_UttfGj5tWrZvGSxwESSQQOGIhPFFnlXSqA';
+
+    @testSetup
+    static void setup() {
+
+        Id bankRecordTypeId = Schema.SObjectType.Account.getRecordTypeInfosByDeveloperName().get('Issuer_Bank').getRecordTypeId();
+
+        Account bank = new Account(
+            Name = 'Bank Test',
+            RecordTypeId = bankRecordTypeId,
+            Country__c = 'US',
+            CurrencyIsoCode = 'USD'
+        );
+        insert bank;
+    }
+
+    @isTest
+    static void testSuccess() {
+
+        Account bank = [SELECT Id FROM Account WHERE RecordType.DeveloperName = 'Issuer_Bank' LIMIT 1];
+
+        RestContext.request = new RestRequest();
+        RestContext.request.requestURI = '/sales/enterprise/transversal/benefits_configuration/vexp/banks/' + bank.Id;
+        RestContext.request.httpMethod = 'GET';
+        RestContext.request.headers.put('authorization2', 'Bearer ' + token);
+
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        WebportalSalesBanks_VEXP.getBanks();
+        Test.stopTest();
+
+        WebportalSalesBanks_VEXP.BankResponse response =
+            (WebportalSalesBanks_VEXP.BankResponse)
+                JSON.deserialize(
+                    RestContext.response.responseBody.toString(),
+                    WebportalSalesBanks_VEXP.BankResponse.class
+                );
+
+        System.assertEquals(200, RestContext.response.statusCode);
+        System.assertEquals(bank.Id, response.bank_id);
+        System.assertEquals('Bank Test', response.bank_name);
+        System.assertEquals('US', response.country);
+        System.assertEquals('USD', response.base_currency);
+    }
+
+    @isTest
+    static void testFailWithEmptyBankId() {
+
+        RestContext.request = new RestRequest();
+        RestContext.request.requestURI = '/sales/enterprise/transversal/benefits_configuration/vexp/banks/';
+        RestContext.request.httpMethod = 'GET';
+        RestContext.request.headers.put('authorization2', 'Bearer ' + token);
+
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        WebportalSalesBanks_VEXP.getBanks();
+        Test.stopTest();
+
+        System.assertEquals(400, RestContext.response.statusCode);
+    }
+
+    @isTest
+    static void testUnauthorized() {
+
+        RestContext.request = new RestRequest();
+        RestContext.request.requestURI = '/sales/enterprise/transversal/benefits_configuration/vexp/banks/';
+        RestContext.request.httpMethod = 'GET';
+
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        WebportalSalesBanks_VEXP.getBanks();
+        Test.stopTest();
+
+        System.assertEquals(401, RestContext.response.statusCode);
+    }
+
+
+    @isTest
+    static void testFailWithBankNotFound() {
+
+        RestContext.request = new RestRequest();
+        RestContext.request.requestURI = '/sales/enterprise/transversal/benefits_configuration/vexp/banks/001000000000000AAA';
+        RestContext.request.httpMethod = 'GET';
+        RestContext.request.headers.put('authorization2', 'Bearer ' + token);
+
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        WebportalSalesBanks_VEXP.getBanks();
+        Test.stopTest();
+
+        System.assertEquals(404, RestContext.response.statusCode);
+    }
+}
+
+=======================================================================================================================================
+=======================================================================================================================================
+
+@isTest
+private class Test_WebportalSalesBanksAgents_VEXP {
+
+    private static String token =  'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InhobHdPb3h2M1YwbmpiSTU1eDlEVCJ9.eyJtaSI6ZmFsc2UsImlzcyI6Imh0dHBzOi8vYXV0aC1zdGcuYXBpLmF4YXBhcnRuZXJzLmNvbS8iLCJzdWIiOiJhRWhZNGN5UzdpS00wbHVITU1XRlRYbk5ybjFBMVA2Q0BjbGllbnRzIiwiYXVkIjoiaHR0cHM6Ly9hcGktdGVzdC5heGEtYXNzaXN0YW5jZS5jb20vIiwiaWF0IjoxNzg1NDQ5MzcwLCJleHAiOjE3ODU0NTI5NzAsInNjb3BlIjoidXJuOmF4YS5wYXJ0bmVycy5zYWxlcy50cmF2ZWwucHJvZHVjdHMuYmVuZWZpdHMucmVhZF9vbmx5IHVybjpheGEucGFydG5lcnMuc2FsZXMudHJhdmVsLnByb2R1Y3RzLnJlYWRfb25seSB1cm46YXhhLnBhcnRuZXJzLnNwZWNpZmljLnZpc2FnYXRld2F5LmFjY291bnRfcmVjb3ZlcnlfcmVxdWVzdHMud3JpdGUgdXJuOmF4YS5wYXJ0bmVycy5zcGVjaWZpYy52aXNhZ2F0ZXdheS5leHBlY3RlZF9kb2N1bWVudHMucmVhZF9vbmx5IHVybjpheGEucGFydG5lcnMuc3BlY2lmaWMudmlzYWdhdGV3YXkuZnJlcXVlbnRseV9hc2tlZF9xdWVzdGlvbnMucmVhZF9vbmx5IHVybjpheGEucGFydG5lcnMuc3BlY2lmaWMudmlzYWdhdGV3YXkuZnJlcXVlbnRseV9hc2tlZF9xdWVzdGlvbnMud3JpdGUgdXJuOmF4YS5wYXJ0bmVycy5zcGVjaWZpYy52aXNhZ2F0ZXdheS5wcm9kdWN0cy5iZW5lZml0cy5yZWFkX29ubHkgdXJuOmF4YS5wYXJ0bmVycy5zcGVjaWZpYy52aXNhZ2F0ZXdheS5wcm9kdWN0cy5yZWFkX29ubHkgdXJuOmF4YS5wYXJ0bmVycy5zYWxlcy5lbnRlcnByaXNlLnRyYW5zdmVyc2FsLmJlbmVmaXRzX2NvbmZpZ3VyYXRpb24uYmFua3MuYWdlbnRzLnJlYWRfb25seSB1cm46YXhhLnBhcnRuZXJzLnNhbGVzLmVudGVycHJpc2UudHJhbnN2ZXJzYWwuYmVuZWZpdHNfY29uZmlndXJhdGlvbi5iYW5rcy5hZ2VudHMud3JpdGUiLCJndHkiOiJjbGllbnQtY3JlZGVudGlhbHMiLCJhenAiOiJhRWhZNGN5UzdpS00wbHVITU1XRlRYbk5ybjFBMVA2QyJ9.f06euFINSbHtrlz9lJ-pTPFFlgKb3oO5yKdiR3GV-QVCB7Xv5JxAUW5rvs3iuhHwSbEWixn7dYhk0sajkyEwb6gXbCR3aKz8h00C1eRMYYEkEvH1mahVM-4hfw-M4PDMM5ijv_1Fem7EVtQVttFtCB8JILKSNVZhhxc1u3Vr4swS3EG3jP9L4PgLwp_TOfkkmctYmqHF_DdKn9gMR5immpNS76R9GMV2suBu-fvUCmpbft_VKyklLlpwcRifI_XCg2R0y-gR2iMmeVN21n3VPeh2vLiHbwH2N_IXxb_uZMcVdXzl1O8gred5V_E-K7_Hpk6Du_YZwCmaMz19ZQzP4Q';
+
+	@testSetup
+	static void setup() {
+
+        Id bankRecordTypeId = Schema.SObjectType.Account.getRecordTypeInfosByDeveloperName().get('Issuer_Bank').getRecordTypeId();
+
+        Account bank = new Account(
+            Name = 'Bank Test',
+            RecordTypeId = bankRecordTypeId,
+            Country__c = 'US',
+            CurrencyIsoCode = 'USD'
+        );
+        insert bank;
+
+        Contact agent = new Contact(
+            FirstName = 'Paulo',
+            LastName = 'Silva',
+            Email = 'paulo.silva@test.com',
+            AccountId = bank.Id
+        );
+        insert agent;
+    }
+
+    @isTest
+    static void testSuccessPOST() {
+
+        Account bank = [SELECT Id FROM Account WHERE RecordType.DeveloperName = 'Issuer_Bank' LIMIT 1];
+
+        RestContext.request = new RestRequest();
+        RestContext.request.requestURI = '/sales/enterprise/transversal/benefits_configuration/vexp/banks/' + bank.Id + '/agents';
+        RestContext.request.httpMethod = 'POST';
+        RestContext.request.headers.put('authorization2', 'Bearer ' + token);
+
+        RestContext.request.requestBody = Blob.valueOf(
+            '{' +
+            '"first_name":"Maria",' +
+            '"last_name":"Silva",' +
+            '"email":"maria@test.com"' +
+            '}'
+        );
+
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        WebportalSalesBanksAgents_VEXP.doPost();
+        Test.stopTest();
+
+        System.assertEquals(200, RestContext.response.statusCode);
+
+        Contact contact = [SELECT FirstName, LastName, Email, AccountId FROM Contact WHERE Email = 'maria@test.com' LIMIT 1];
+
+        System.assertEquals(bank.Id, contact.AccountId);
+        System.assertEquals('Maria', contact.FirstName);
+        System.assertEquals('Silva', contact.LastName);
+    }
+
+    @isTest
+    static void testFailBankNotFoundPOST() {
+
+        RestContext.request = new RestRequest();
+        RestContext.request.requestURI = '/sales/enterprise/transversal/benefits_configuration/vexp/banks/001000000000000AAA/agents';
+        RestContext.request.httpMethod = 'POST';
+        RestContext.request.headers.put('authorization2', 'Bearer ' + token);
+
+        RestContext.request.requestBody = Blob.valueOf(
+            '{' +
+            '"first_name":"Maria",' +
+            '"last_name":"Silva",' +
+            '"email":"maria@test.com"' +
+            '}'
+        );
+
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        WebportalSalesBanksAgents_VEXP.doPost();
+        Test.stopTest();
+
+        System.assertEquals(400, RestContext.response.statusCode);
+    }
+   
+    @isTest
+    static void testFailMissingFirstNamePOST() {
+
+        Account bank = [SELECT Id FROM Account WHERE RecordType.DeveloperName = 'Issuer_Bank' LIMIT 1];
+
+        RestContext.request = new RestRequest();
+        RestContext.request.requestURI = '/sales/enterprise/transversal/benefits_configuration/vexp/banks/' + bank.Id + '/agents';
+        RestContext.request.httpMethod = 'POST';
+        RestContext.request.headers.put('authorization2', 'Bearer ' + token);
+
+        RestContext.request.requestBody = Blob.valueOf(
+            '{' +
+            '"first_name":"",' +
+            '"last_name":"Silva",' +
+            '"email":"test@test.com"' +
+            '}'
+        );
+
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        WebportalSalesBanksAgents_VEXP.doPost();
+        Test.stopTest();
+
+        System.assertEquals(400, RestContext.response.statusCode);
+    }
+
+    @isTest
+    static void testFailRequiredFirstNamePOST() {
+
+        Account bank = [SELECT Id FROM Account WHERE RecordType.DeveloperName = 'Issuer_Bank' LIMIT 1];
+
+        RestContext.request = new RestRequest();
+        RestContext.request.requestURI = '/sales/enterprise/transversal/benefits_configuration/vexp/banks/' + bank.Id + '/agents';
+        RestContext.request.httpMethod = 'POST';
+        RestContext.request.headers.put('authorization2', 'Bearer ' + token);
+
+        RestContext.request.requestBody = Blob.valueOf(
+            '{' +
+            '"last_name":"Silva",' +
+            '"email":"test@test.com"' +
+            '}'
+        );
+
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        WebportalSalesBanksAgents_VEXP.doPost();
+        Test.stopTest();
+
+        System.assertEquals(400, RestContext.response.statusCode);
+    }
+
+    @isTest
+    static void testFailMissingLastNamePOST() {
+
+        Account bank = [SELECT Id FROM Account WHERE RecordType.DeveloperName = 'Issuer_Bank' LIMIT 1];
+
+        RestContext.request = new RestRequest();
+        RestContext.request.requestURI = '/sales/enterprise/transversal/benefits_configuration/vexp/banks/' + bank.Id + '/agents';
+        RestContext.request.httpMethod = 'POST';
+        RestContext.request.headers.put('authorization2', 'Bearer ' + token);
+
+        RestContext.request.requestBody = Blob.valueOf(
+            '{' +
+            '"first_name":"Maria",' +
+            '"last_name":"",' +
+            '"email":"test@test.com"' +
+            '}'
+        );
+
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        WebportalSalesBanksAgents_VEXP.doPost();
+        Test.stopTest();
+
+        System.assertEquals(400, RestContext.response.statusCode);
+    }
+
+        @isTest
+    static void testFailMissingEmailPOST() {
+
+        Account bank = [SELECT Id FROM Account WHERE RecordType.DeveloperName = 'Issuer_Bank' LIMIT 1];
+
+        RestContext.request = new RestRequest();
+        RestContext.request.requestURI = '/sales/enterprise/transversal/benefits_configuration/vexp/banks/' + bank.Id + '/agents';
+        RestContext.request.httpMethod = 'POST';
+        RestContext.request.headers.put('authorization2', 'Bearer ' + token);
+
+        RestContext.request.requestBody = Blob.valueOf(
+            '{' +
+            '"first_name":"Maria",' +
+            '"last_name":"Silva",' +
+            '"email":""' +
+            '}'
+        );
+
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        WebportalSalesBanksAgents_VEXP.doPost();
+        Test.stopTest();
+
+        System.assertEquals(400, RestContext.response.statusCode);
+    }
+
+    @isTest
+    static void testFailTooLongPOST() {
+
+        Account bank = [SELECT Id FROM Account WHERE RecordType.DeveloperName = 'Issuer_Bank' LIMIT 1];
+
+        String firstName = '';
+        for(Integer i = 0; i < 41; i++) {
+            firstName += 'A';
+        }
+
+        RestContext.request = new RestRequest();
+        RestContext.request.requestURI = '/sales/enterprise/transversal/benefits_configuration/vexp/banks/' + bank.Id + '/agents';
+        RestContext.request.httpMethod = 'POST';
+        RestContext.request.headers.put('authorization2', 'Bearer ' + token);
+
+        RestContext.request.requestBody = Blob.valueOf(
+            '{' +
+            '"first_name":"' + firstName + '",' +
+            '"last_name":"Silva",' +
+            '"email":"teste@test.com"' +
+            '}'
+        );
+
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        WebportalSalesBanksAgents_VEXP.doPost();
+        Test.stopTest();
+
+        System.assertEquals(400, RestContext.response.statusCode);
+
+        WebportalApiUtility_v1.ErrorMessage error = (WebportalApiUtility_v1.ErrorMessage)
+            JSON.deserialize(RestContext.response.responseBody.toString(), 
+                WebportalApiUtility_v1.ErrorMessage.class
+            );
+
+        System.assert(error.error_description.contains('first_name'));
+    }   
+
+    @isTest
+    static void testFailInvalidJsonPOST() {
+
+        Account bank = [SELECT Id FROM Account WHERE RecordType.DeveloperName='Issuer_Bank' LIMIT 1];
+
+        RestContext.request = new RestRequest();
+        RestContext.request.requestURI = '/sales/enterprise/transversal/benefits_configuration/vexp/banks/' + bank.Id + '/agents';
+        RestContext.request.httpMethod = 'POST';
+        RestContext.request.headers.put('authorization2', 'Bearer ' + token);
+        RestContext.request.requestBody = Blob.valueOf('{ "first_name":"Maria"');
+
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        WebportalSalesBanksAgents_VEXP.doPost();
+        Test.stopTest();
+
+        System.assertEquals(400, RestContext.response.statusCode);
+    }
+
+    @isTest
+    static void testUnauthorizedPOST() {
+
+        Account bank = [SELECT Id FROM Account WHERE RecordType.DeveloperName='Issuer_Bank' LIMIT 1];
+
+        RestContext.request = new RestRequest();
+        RestContext.request.requestURI = '/sales/enterprise/transversal/benefits_configuration/vexp/banks/' + bank.Id + '/agents';
+        RestContext.request.httpMethod = 'POST';
+        RestContext.request.requestBody = Blob.valueOf(
+            '{' +
+            '"first_name":"Maria",' +
+            '"last_name":"Silva",' +
+            '"email":"maria@test.com"' +
+            '}'
+        );
+
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        WebportalSalesBanksAgents_VEXP.doPost();
+        Test.stopTest();
+
+        System.assertEquals(401, RestContext.response.statusCode);
+    }
+
+
+    @isTest
+    static void testSuccessPOSTWithEmailSubscription() {
+
+        Account bank = [SELECT Id FROM Account WHERE RecordType.DeveloperName = 'Issuer_Bank' LIMIT 1];
+
+        RestContext.request = new RestRequest();
+        RestContext.request.requestURI = '/sales/enterprise/transversal/benefits_configuration/vexp/banks/' + bank.Id + '/agents';
+        RestContext.request.httpMethod = 'POST';
+        RestContext.request.headers.put('authorization2', 'Bearer ' + token);
+
+        RestContext.request.requestBody = Blob.valueOf(
+            '{' +
+            '"first_name":"Maria",' +
+            '"last_name":"Silva",' +
+            '"email":"maria.subscription@test.com",' +
+            '"communication_subscriptions":{' +
+                '"email":true' +
+            '}' +
+            '}'
+        );
+
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        WebportalSalesBanksAgents_VEXP.doPost();
+        Test.stopTest();
+
+        System.assertEquals(200, RestContext.response.statusCode);
+
+        Contact contact = [SELECT Id, AccountId FROM Contact WHERE Email = 'maria.subscription@test.com' LIMIT 1];
+
+        List<Communication_Subscription__c> subscriptions = [
+            SELECT Customer__c, Contact__c, Channel__c 
+            FROM Communication_Subscription__c 
+            WHERE Contact__c = :contact.Id AND Channel__c = 'EMAIL'];
+
+        System.assertEquals(1, subscriptions.size());
+        System.assertEquals(bank.Id, subscriptions[0].Customer__c);
+        System.assertEquals(contact.Id, subscriptions[0].Contact__c);
+        System.assertEquals('EMAIL', subscriptions[0].Channel__c);
+    }
+
+    @isTest
+    static void testSuccessPOSTWithoutEmailSubscription() {
+
+        Account bank = [SELECT Id FROM Account WHERE RecordType.DeveloperName = 'Issuer_Bank' LIMIT 1];
+
+        RestContext.request = new RestRequest();
+        RestContext.request.requestURI = '/sales/enterprise/transversal/benefits_configuration/vexp/banks/' + bank.Id + '/agents';
+        RestContext.request.httpMethod = 'POST';
+        RestContext.request.headers.put('authorization2', 'Bearer ' + token);
+
+        RestContext.request.requestBody = Blob.valueOf(
+            '{' +
+            '"first_name":"Maria",' +
+            '"last_name":"Silva",' +
+            '"email":"maria.nosubscription@test.com",' +
+            '"communication_subscriptions":{' +
+                '"email":false' +
+            '}' +
+            '}'
+        );
+
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        WebportalSalesBanksAgents_VEXP.doPost();
+        Test.stopTest();
+
+        System.assertEquals(200, RestContext.response.statusCode);
+
+        Contact contact = [SELECT Id FROM Contact WHERE Email = 'maria.nosubscription@test.com' LIMIT 1];
+
+        System.assertEquals(0, [SELECT COUNT() FROM Communication_Subscription__c WHERE Contact__c = :contact.Id]);
+    }
+
+    @isTest
+    static void testSuccessGET() {
+
+        Account bank = [SELECT Id FROM Account WHERE RecordType.DeveloperName = 'Issuer_Bank' LIMIT 1];
+        Contact agent = [SELECT Id FROM Contact WHERE AccountId = :bank.Id LIMIT 1];
+
+        RestContext.request = new RestRequest();
+        RestContext.request.requestURI = '/sales/enterprise/transversal/benefits_configuration/vexp/banks/' + bank.Id + '/agents/' + agent.Id;
+        RestContext.request.httpMethod = 'GET';
+        RestContext.request.headers.put('authorization2', 'Bearer ' + token);
+
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        
+        WebportalSalesBanksAgents_VEXP.doGet();
+
+        String responseBody = RestContext.response.responseBody.toString();
+
+        WebportalSalesBanksAgents_VEXP.AgentData response =
+            (WebportalSalesBanksAgents_VEXP.AgentData)
+                JSON.deserialize(
+                    responseBody,
+                    WebportalSalesBanksAgents_VEXP.AgentData.class
+                );
+
+        Test.stopTest();
+
+        System.assertEquals(200, RestContext.response.statusCode);
+        System.assertEquals('Paulo', response.first_name);
+        System.assertEquals('Silva', response.last_name);
+        System.assertEquals('paulo.silva@test.com', response.email);
+        System.assertEquals(null, response.communication_subscriptions);
+    }
+
+    @isTest
+    static void testFailWithEmptyIdsGET() {
+
+        RestContext.request = new RestRequest();
+        RestContext.request.requestURI = '/sales/enterprise/transversal/benefits_configuration/vexp/banks//agents/';
+        RestContext.request.httpMethod = 'GET';
+        RestContext.request.headers.put('authorization2', 'Bearer ' + token);
+
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+
+        WebportalSalesBanksAgents_VEXP.doGet();
+
+        String responseBody = RestContext.response.responseBody.toString();
+
+        WebportalApiUtility_v1.ErrorMessage response = (WebportalApiUtility_v1.ErrorMessage)
+            JSON.deserialize(responseBody, 
+                WebportalApiUtility_v1.ErrorMessage.class
+            );
+
+        Test.stopTest();
+
+        System.assertEquals(400, RestContext.response.statusCode);
+    }
+
+    @isTest
+    static void testFailAgentNotFoundGET() {
+
+        Account bank = [SELECT Id FROM Account WHERE RecordType.DeveloperName = 'Issuer_Bank' LIMIT 1];
+
+        RestContext.request = new RestRequest();
+        RestContext.request.requestURI = '/sales/enterprise/transversal/benefits_configuration/vexp/banks/' + bank.Id + '/agents/003000000000000AAA';
+
+        RestContext.request.httpMethod = 'GET';
+        RestContext.request.headers.put('authorization2', 'Bearer ' + token);
+
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+
+        WebportalSalesBanksAgents_VEXP.doGet();
+
+        String responseBody = RestContext.response.responseBody.toString();
+
+        WebportalApiUtility_v1.ErrorMessage response = (WebportalApiUtility_v1.ErrorMessage)
+            JSON.deserialize(responseBody, 
+                WebportalApiUtility_v1.ErrorMessage.class
+            );
+
+        Test.stopTest();
+
+        System.assertEquals(404, RestContext.response.statusCode);
+    }
+
+    @isTest
+    static void testUnauthorizedGET() {
+
+        RestContext.request = new RestRequest();
+        RestContext.request.requestURI = '/sales/enterprise/transversal/benefits_configuration/vexp/banks/001000000000001AAA/agents/003000000000001AAA';
+        RestContext.request.httpMethod = 'GET';
+
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        WebportalSalesBanksAgents_VEXP.doGet();
+        Test.stopTest();
+
+        System.assertEquals(401, RestContext.response.statusCode);    
+    }
+
+    @isTest
+    static void testSuccessGETWithEmailSubscription() {
+
+        Contact agent = [SELECT Id, Contact.AccountId FROM Contact WHERE Account.RecordType.DeveloperName = 'Issuer_Bank' LIMIT 1];
+
+        insert new Communication_Subscription__c(
+            Customer__c = agent.AccountId,
+            Contact__c = agent.Id,
+            Channel__c = 'EMAIL'
+        );
+
+        RestContext.request = new RestRequest();
+        RestContext.request.requestURI =
+            '/sales/enterprise/transversal/benefits_configuration/vexp/banks/' +
+            agent.AccountId +
+            '/agents/' +
+            agent.Id;
+        RestContext.request.httpMethod = 'GET';
+        RestContext.request.headers.put('authorization2', 'Bearer ' + token);
+
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        WebportalSalesBanksAgents_VEXP.doGet();
+        Test.stopTest();
+
+        WebportalSalesBanksAgents_VEXP.AgentData response =
+            (WebportalSalesBanksAgents_VEXP.AgentData)
+                JSON.deserialize(
+                    RestContext.response.responseBody.toString(),
+                    WebportalSalesBanksAgents_VEXP.AgentData.class
+                );
+
+        System.assertEquals(200, RestContext.response.statusCode);
+        System.assertNotEquals(null, response.communication_subscriptions);
+        System.assertEquals(true, response.communication_subscriptions.email);
+    }
+
+    @isTest
+    static void testSuccessPATCHBenefitPackageSubscription() {
+
+        Contact agent = [SELECT Id, Contact.AccountId FROM Contact WHERE Account.RecordType.DeveloperName = 'Issuer_Bank' LIMIT 1];
+
+        RestContext.request = new RestRequest();
+        RestContext.request.requestURI =
+            '/sales/enterprise/transversal/benefits_configuration/vexp/banks/' +
+            agent.AccountId + '/agents/' + agent.Id;
+        RestContext.request.httpMethod = 'PATCH';
+        RestContext.request.headers.put('authorization2', 'Bearer ' + token);
+
+        RestContext.request.requestBody = Blob.valueOf(
+            '{' +
+                '"communication_subscriptions":{' +
+                    '"benefit_packages":true' +
+                '}' +
+            '}'
+        );
+
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        WebportalSalesBanksAgents_VEXP.doPatch();
+        Test.stopTest();
+
+        System.assertEquals(200, RestContext.response.statusCode);
+        System.assertEquals(1, [SELECT COUNT() FROM Communication_Subscription__c WHERE Contact__c = :agent.Id AND Channel__c = 'PUSH_NOTIFICATION' AND Related_To__c = 'BENEFIT_PACKAGES' LIMIT 1]);
+
+        WebportalSalesBanksAgents_VEXP.BenefitPackageSubscriptionResponse response =
+            (WebportalSalesBanksAgents_VEXP.BenefitPackageSubscriptionResponse)
+                JSON.deserialize(
+                    RestContext.response.responseBody.toString(),
+                    WebportalSalesBanksAgents_VEXP.BenefitPackageSubscriptionResponse.class
+                );
+
+        System.assertEquals(true, response.communication_subscriptions.benefit_packages);
+    }
+
+    @isTest
+    static void testSuccessPATCHUpdateBenefitPackageSubscription() {
+        Contact agent = [SELECT Id, Contact.AccountId FROM Contact WHERE Account.RecordType.DeveloperName = 'Issuer_Bank' LIMIT 1];
+
+        RestContext.request = new RestRequest();
+        RestContext.request.requestURI =
+            '/sales/enterprise/transversal/benefits_configuration/vexp/banks/' +
+            agent.AccountId + '/agents/' + agent.Id;
+        RestContext.request.httpMethod = 'PATCH';
+        RestContext.request.headers.put('authorization2', 'Bearer ' + token);
+
+        RestContext.request.requestBody = Blob.valueOf(
+            '{' +
+                '"communication_subscriptions":{' +
+                    '"benefit_packages":true' +
+                '}' +
+            '}'
+        );
+
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        WebportalSalesBanksAgents_VEXP.doPatch();
+        Test.stopTest();
+
+        System.assertEquals(200, RestContext.response.statusCode);
+        System.assertEquals(1, [SELECT COUNT() FROM Communication_Subscription__c WHERE Contact__c = :agent.Id AND Channel__c = 'PUSH_NOTIFICATION' AND Related_To__c = 'BENEFIT_PACKAGES']);
+
+        WebportalSalesBanksAgents_VEXP.BenefitPackageSubscriptionResponse response =
+            (WebportalSalesBanksAgents_VEXP.BenefitPackageSubscriptionResponse)
+                JSON.deserialize(
+                    RestContext.response.responseBody.toString(),
+                    WebportalSalesBanksAgents_VEXP.BenefitPackageSubscriptionResponse.class
+                );
+
+        System.assertEquals(true, response.communication_subscriptions.benefit_packages);
+    }
+
+    @isTest
+    static void testSuccessPATCHDeleteBenefitPackageSubscription() {
+
+        Contact agent = [SELECT Id, AccountId FROM Contact WHERE Account.RecordType.DeveloperName = 'Issuer_Bank' LIMIT 1];
+
+        insert new Communication_Subscription__c(
+            Customer__c = agent.AccountId,
+            Contact__c = agent.Id,
+            Channel__c = 'PUSH_NOTIFICATION',
+            Related_To__c = 'BENEFIT_PACKAGES'
+        );
+
+        RestContext.request = new RestRequest();
+        RestContext.request.requestURI =
+            '/sales/enterprise/transversal/benefits_configuration/vexp/banks/' +
+            agent.AccountId +
+            '/agents/' +
+            agent.Id;
+        RestContext.request.httpMethod = 'PATCH';
+        RestContext.request.headers.put('authorization2', 'Bearer ' + token);
+
+        RestContext.request.requestBody = Blob.valueOf(
+            '{' +
+                '"communication_subscriptions":{' +
+                    '"benefit_packages":false' +
+                '}' +
+            '}'
+        );
+
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        WebportalSalesBanksAgents_VEXP.doPatch();
+        Test.stopTest();
+
+        System.assertEquals(200, RestContext.response.statusCode);
+        System.assertEquals(0, [SELECT COUNT() FROM Communication_Subscription__c WHERE Contact__c = :agent.Id AND Channel__c = 'PUSH_NOTIFICATION' AND Related_To__c = 'BENEFIT_PACKAGES']
+        
+        );
+
+        WebportalSalesBanksAgents_VEXP.BenefitPackageSubscriptionResponse response =
+            (WebportalSalesBanksAgents_VEXP.BenefitPackageSubscriptionResponse)
+                JSON.deserialize(
+                    RestContext.response.responseBody.toString(),
+                    WebportalSalesBanksAgents_VEXP.BenefitPackageSubscriptionResponse.class
+                );
+
+        System.assertEquals(false, response.communication_subscriptions.benefit_packages);
+    }
+
+    @isTest
+    static void testFailAgentNotFoundPATCH() {
+
+        Account bank = [SELECT Id FROM Account WHERE RecordType.DeveloperName = 'Issuer_Bank' LIMIT 1];
+
+        RestContext.request = new RestRequest();
+        RestContext.request.requestURI =
+            '/sales/enterprise/transversal/benefits_configuration/vexp/banks/'
+            + bank.Id + '/agents/003000000000000AAA';
+        RestContext.request.httpMethod = 'PATCH';
+        RestContext.request.headers.put('authorization2', 'Bearer ' + token);
+        RestContext.request.requestBody = Blob.valueOf(
+            '{"communication_subscriptions":{"benefit_packages":true}}'
+        );
+
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        WebportalSalesBanksAgents_VEXP.doPatch();
+        Test.stopTest();
+
+        System.assertEquals(404, RestContext.response.statusCode);
+    }
+
+    @isTest
+    static void testFailEmptyIdsPATCH() {
+
+        RestContext.request = new RestRequest();
+        RestContext.request.requestURI =
+            '/sales/enterprise/transversal/benefits_configuration/vexp/banks//agents/';
+        RestContext.request.httpMethod = 'PATCH';
+        RestContext.request.headers.put('authorization2', 'Bearer ' + token);
+        RestContext.request.requestBody = Blob.valueOf(
+            '{"communication_subscriptions":{"benefit_packages":true}}'
+        );
+
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        WebportalSalesBanksAgents_VEXP.doPatch();
+        Test.stopTest();
+
+        System.assertEquals(400, RestContext.response.statusCode);
+    }
+
+    @isTest
+    static void testUnauthorizedPATCH() {
+
+        Account bank = [SELECT Id, (SELECT Id FROM Contacts LIMIT 1) FROM Account WHERE RecordType.DeveloperName = 'Issuer_Bank' LIMIT 1];
+        Contact agent = bank.Contacts[0];
+
+        RestContext.request = new RestRequest();
+        RestContext.request.requestURI =
+            '/sales/enterprise/transversal/benefits_configuration/vexp/banks/'
+            + bank.Id + '/agents/' + agent.Id;
+        RestContext.request.httpMethod = 'PATCH';
+        RestContext.request.requestBody = Blob.valueOf(
+            '{"communication_subscriptions":{"benefit_packages":true}}'
+        );
+
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        WebportalSalesBanksAgents_VEXP.doPatch();
+        Test.stopTest();
+
+        System.assertEquals(401, RestContext.response.statusCode);
+    }
+}
