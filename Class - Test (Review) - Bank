@@ -1,204 +1,46 @@
-WebportalApiUtility_v1.RequestAPIException: Script-thrown exception
-Class.BenefitsConfigAPIBanks_VEXP.doPatch: line 70, column 1
-Class.Test_BenefitsConfigAPIBanks_VEXP.testFailEmptyIdsPATCH: line 719, column 1
+18:31:43.411 (6425131587)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x5b6392
+18:31:43.411 (6425137748)|VARIABLE_ASSIGNMENT|[EXTERNAL]|value|401
+18:31:43.411 (6425141420)|STATEMENT_EXECUTE|[445]
+18:31:43.411 (6425142257)|STATEMENT_EXECUTE|[445]
+18:31:43.411 (6425143830)|HEAP_ALLOCATE|[445]|Bytes:4
+18:31:43.411 (6425148731)|VARIABLE_ASSIGNMENT|[445]|this.status_code|401|0x1496bb8
+18:31:43.411 (6425153514)|STATEMENT_EXECUTE|[439]
+18:31:43.411 (6425172852)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x72249b8a
+18:31:43.411 (6425178204)|VARIABLE_ASSIGNMENT|[EXTERNAL]|value|"unauthorized"
+18:31:43.411 (6425180830)|STATEMENT_EXECUTE|[450]
+18:31:43.411 (6425181633)|STATEMENT_EXECUTE|[450]
+18:31:43.411 (6425184860)|VARIABLE_ASSIGNMENT|[450]|this.error|"unauthorized"|0x1496bb8
+18:31:43.411 (6425189178)|STATEMENT_EXECUTE|[440]
+18:31:43.411 (6425206751)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x619583f
+18:31:43.411 (6425212195)|VARIABLE_ASSIGNMENT|[EXTERNAL]|value|"Missing access token (7 more) ..."
+18:31:43.411 (6425214823)|STATEMENT_EXECUTE|[455]
+18:31:43.411 (6425215666)|STATEMENT_EXECUTE|[455]
+18:31:43.411 (6425218591)|VARIABLE_ASSIGNMENT|[455]|this.error_Description|"Missing access token (7 more) ..."|0x1496bb8
+18:31:43.411 (6425232665)|CONSTRUCTOR_EXIT|[109]|01p0N00000ASuS7|<init>(Integer,String,String)|WebportalApiUtility_v1.RequestAPIException
+18:31:43.411 (6425243975)|EXCEPTION_THROWN|[109]|WebportalApiUtility_v1.RequestAPIException: Script-thrown exception
+18:31:43.411 (6425255882)|EXCEPTION_THROWN|[171]|WebportalApiUtility_v1.RequestAPIException: Script-thrown exception
+18:31:43.411 (6425260023)|METHOD_EXIT|[4]|01p0N00000ASuS1|WebportalAPITokenAuthentication_v1.getAccessTokenData(System.RestRequest)
+18:31:43.411 (6425266814)|EXCEPTION_THROWN|[6]|WebportalApiUtility_v1.RequestAPIException: Script-thrown exception
+18:31:43.411 (6425270794)|METHOD_EXIT|[201]|01p0N00000ASuS1|WebportalAPITokenAuthentication_v1.parseAndValidateSecurityToken(System.RestRequest, Set<String>)
+18:31:43.411 (6425286598)|VARIABLE_SCOPE_BEGIN|[252]|ex|WebportalApiUtility_v1.RequestAPIException|true|false
+18:31:43.411 (6425307026)|VARIABLE_ASSIGNMENT|[252]|ex|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x5d05ec9d
+18:31:43.411 (6425310481)|STATEMENT_EXECUTE|[252]
+18:31:43.411 (6425311283)|STATEMENT_EXECUTE|[253]
+18:31:43.411 (6425330128)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x17db582e
+18:31:43.411 (6425333670)|STATEMENT_EXECUTE|[444]
+18:31:43.411 (6425334490)|STATEMENT_EXECUTE|[444]
+18:31:43.411 (6425354518)|STATEMENT_EXECUTE|[254]
+18:31:43.411 (6425360318)|HEAP_ALLOCATE|[256]|Bytes:4
+18:31:43.411 (6425364540)|HEAP_ALLOCATE|[256]|Bytes:16
+18:31:43.411 (6425382153)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x41f57994
+18:31:43.411 (6425385554)|STATEMENT_EXECUTE|[444]
+18:31:43.411 (6425386286)|STATEMENT_EXECUTE|[444]
+18:31:43.411 (6425402376)|HEAP_ALLOCATE|[257]|Bytes:3
+18:31:43.411 (6425426533)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0xde10935
+18:31:43.411 (6425431445)|STATEMENT_EXECUTE|[449]
+18:31:43.411 (6425432538)|STATEMENT_EXECUTE|[449]
+18:31:43.411 (6425457141)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x7ff27d10
+18:31:43.411 (6425460678)|STATEMENT_EXECUTE|[454]
+18:31:43.411 (6425461548)|STATEMENT_EXECUTE|[454]
+18:31:43.411 (6425469601)|CONSTRUCTOR_ENTRY|[256]|01p0N00000ASuS7|<init>(String,String,String)|WebportalApiUtility_v1.ErrorMessage
 
-WebportalApiUtility_v1.RequestAPIException: Script-thrown exception
-Class.BenefitsConfigAPIBanks_VEXP.doGet: line 40, column 1
-Class.Test_BenefitsConfigAPIBanks_VEXP.testFailWithEmptyBankIdGET: line 75, column 1
-
-
-@isTest
-private class Test_BenefitsConfigAPIBanks_VEXP {
-
-    @testSetup
-    static void setup() {
-
-        Account bank = new Account(
-            Name = 'Bank Test',
-            RecordTypeId = Schema.SObjectType.Account.getRecordTypeInfosByDeveloperName().get('Issuer_Bank').getRecordTypeId(),
-            Country__c = 'US',
-            CurrencyIsoCode = 'USD'
-        );
-        insert bank;
-
-        Contact agent = new Contact(
-            FirstName = 'Paulo',
-            LastName = 'Silva',
-            Email = 'paulo.silva@test.com',
-            //RecordTypeId = Schema.SObjectType.Contact.getRecordTypeInfosByDeveloperName().get('Bank_Agent').getRecordTypeId(),
-            AccountId = bank.Id
-        );
-
-        insert agent;
-    }
-
-    @isTest
-    static void testSuccessBankGET() {
-
-        Account bank = [SELECT Id FROM Account WHERE RecordType.DeveloperName = 'Issuer_Bank' LIMIT 1];
-
-        RestContext.request = new RestRequest();
-        RestContext.request.requestURI = '/sales/enterprise/transversal/benefits_configuration/vexp/banks/' + bank.Id;
-        RestContext.request.httpMethod = 'GET';
-        RestContext.request.headers.put('authorization2', 'Bearer ' + token);
-
-        RestContext.response = new RestResponse();
-
-        Test.startTest();
-        BenefitsConfigAPIBanks_VEXP.doGet();
-        Test.stopTest();
-
-        BenefitsConfigAPIBanks_VEXP.BankResponse response =
-            (BenefitsConfigAPIBanks_VEXP.BankResponse)
-                JSON.deserialize(
-                    RestContext.response.responseBody.toString(),
-                    BenefitsConfigAPIBanks_VEXP.BankResponse.class
-                );
-
-        System.assertEquals(200, RestContext.response.statusCode);
-        System.assertEquals(bank.Id, response.bank_id);
-        System.assertEquals('Bank Test', response.bank_name);
-        System.assertEquals('US', response.country);
-        System.assertEquals('USD', response.base_currency);
-    }
-
-    @isTest
-    static void testFailWithEmptyBankIdGET() {
-
-        RestContext.request = new RestRequest();
-        RestContext.request.requestURI = '/sales/enterprise/transversal/benefits_configuration/vexp/banks/';
-        RestContext.request.httpMethod = 'GET';
-        RestContext.request.headers.put('authorization2', 'Bearer ' + token);
-
-        RestContext.response = new RestResponse();
-
-        Test.startTest();
-        BenefitsConfigAPIBanks_VEXP.doGet();
-        Test.stopTest();
-
-        System.assertEquals(400, RestContext.response.statusCode);
-    }
-
-    @isTest
-    static void testFailEmptyIdsPATCH() {
-
-        RestContext.request = new RestRequest();
-        RestContext.request.requestURI = '/sales/enterprise/transversal/benefits_configuration/vexp/banks//agents/';
-        RestContext.request.httpMethod = 'PATCH';
-        RestContext.request.headers.put('authorization2', 'Bearer ' + token);
-        RestContext.request.requestBody = Blob.valueOf(
-            '{"communication_subscriptions":{"benefit_packages":true}}'
-        );
-
-        RestContext.response = new RestResponse();
-
-        Test.startTest();
-        BenefitsConfigAPIBanks_VEXP.doPatch();
-        Test.stopTest();
-
-        System.assertEquals(400, RestContext.response.statusCode);
-    }
-
-17:45:00.855 (8871059806)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x2bee3786
-17:45:00.855 (8871067165)|VARIABLE_ASSIGNMENT|[EXTERNAL]|value|401
-17:45:00.855 (8871071799)|STATEMENT_EXECUTE|[445]
-17:45:00.855 (8871073035)|STATEMENT_EXECUTE|[445]
-17:45:00.855 (8871076328)|HEAP_ALLOCATE|[445]|Bytes:4
-17:45:00.855 (8871082885)|VARIABLE_ASSIGNMENT|[445]|this.status_code|401|0x12fa15b5
-17:45:00.855 (8871089410)|STATEMENT_EXECUTE|[439]
-17:45:00.855 (8871116488)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x44780727
-17:45:00.855 (8871123343)|VARIABLE_ASSIGNMENT|[EXTERNAL]|value|"unauthorized"
-17:45:00.855 (8871126860)|STATEMENT_EXECUTE|[450]
-17:45:00.855 (8871128045)|STATEMENT_EXECUTE|[450]
-17:45:00.855 (8871132092)|VARIABLE_ASSIGNMENT|[450]|this.error|"unauthorized"|0x12fa15b5
-17:45:00.855 (8871137685)|STATEMENT_EXECUTE|[440]
-17:45:00.855 (8871163110)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x5391c0ba
-17:45:00.855 (8871170704)|VARIABLE_ASSIGNMENT|[EXTERNAL]|value|"Missing access token (7 more) ..."
-17:45:00.855 (8871174444)|STATEMENT_EXECUTE|[455]
-17:45:00.855 (8871175578)|STATEMENT_EXECUTE|[455]
-17:45:00.855 (8871179899)|VARIABLE_ASSIGNMENT|[455]|this.error_Description|"Missing access token (7 more) ..."|0x12fa15b5
-17:45:00.855 (8871191242)|CONSTRUCTOR_EXIT|[109]|01p0N00000ASuS7|<init>(Integer,String,String)|WebportalApiUtility_v1.RequestAPIException
-17:45:00.855 (8871207693)|EXCEPTION_THROWN|[109]|WebportalApiUtility_v1.RequestAPIException: Script-thrown exception
-17:45:00.855 (8871222867)|EXCEPTION_THROWN|[171]|WebportalApiUtility_v1.RequestAPIException: Script-thrown exception
-17:45:00.855 (8871228830)|METHOD_EXIT|[4]|01p0N00000ASuS1|WebportalAPITokenAuthentication_v1.getAccessTokenData(System.RestRequest)
-17:45:00.855 (8871237858)|EXCEPTION_THROWN|[6]|WebportalApiUtility_v1.RequestAPIException: Script-thrown exception
-17:45:00.855 (8871242436)|METHOD_EXIT|[201]|01p0N00000ASuS1|WebportalAPITokenAuthentication_v1.parseAndValidateSecurityToken(System.RestRequest, Set<String>)
-17:45:00.855 (8871263301)|VARIABLE_SCOPE_BEGIN|[252]|ex|WebportalApiUtility_v1.RequestAPIException|true|false
-17:45:00.855 (8871292112)|VARIABLE_ASSIGNMENT|[252]|ex|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x9198f49
-17:45:00.855 (8871296747)|STATEMENT_EXECUTE|[252]
-17:45:00.855 (8871297916)|STATEMENT_EXECUTE|[253]
-17:45:00.855 (8871323389)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x4b0c6462
-17:45:00.855 (8871327961)|STATEMENT_EXECUTE|[444]
-17:45:00.855 (8871329231)|STATEMENT_EXECUTE|[444]
-17:45:00.855 (8871356060)|STATEMENT_EXECUTE|[254]
-17:45:00.855 (8871363339)|HEAP_ALLOCATE|[256]|Bytes:4
-17:45:00.855 (8871380335)|HEAP_ALLOCATE|[256]|Bytes:16
-17:45:00.855 (8871407749)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x4f49131b
-17:45:00.855 (8871412164)|STATEMENT_EXECUTE|[444]
-17:45:00.855 (8871413309)|STATEMENT_EXECUTE|[444]
-17:45:00.855 (8871432324)|HEAP_ALLOCATE|[257]|Bytes:3
-17:45:00.855 (8871462552)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x12809e58
-17:45:00.855 (8871467599)|STATEMENT_EXECUTE|[449]
-17:45:00.855 (8871468698)|STATEMENT_EXECUTE|[449]
-17:45:00.855 (8871494366)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x57263886
-17:45:00.855 (8871499148)|STATEMENT_EXECUTE|[454]
-17:45:00.855 (8871500258)|STATEMENT_EXECUTE|[454]
-17:45:00.855 (8871508320)|CONSTRUCTOR_ENTRY|[256]|01p0N00000ASuS7|<init>(String,String,String)|WebportalApiUtility_v1.ErrorMessage
-17:45:00.855 (8871514146)|VARIABLE_SCOPE_BEGIN|[1765]|this|WebportalApiUtility_v1.ErrorMessage|true|false
-17:45:00.855 (8871543053)|VARIABLE_ASSIGNMENT|[1765]|this|{}|0x7f217974
-17:45:00.855 (8871547594)|VARIABLE_SCOPE_BEGIN|[1765]|statusCode|String|false|false
-17:45:00.855 (8871553903)|VARIABLE_ASSIGNMENT|[1765]|statusCode|"401"
-17:45:00.855 (8871557602)|VARIABLE_SCOPE_BEGIN|[1765]|error|String|false|false
-17:45:00.855 (8871563731)|VARIABLE_ASSIGNMENT|[1765]|error|"unauthorized"
-17:45:00.855 (8871567032)|VARIABLE_SCOPE_BEGIN|[1765]|errorDescription|String|false|false
-17:45:00.855 (8871573933)|VARIABLE_ASSIGNMENT|[1765]|errorDescription|"Missing access token (7 more) ..."
-
-17:44:54.379 (2395652215)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x6cfe54c
-17:44:54.379 (2395657181)|VARIABLE_ASSIGNMENT|[EXTERNAL]|value|404
-17:44:54.379 (2395660101)|STATEMENT_EXECUTE|[445]
-17:44:54.379 (2395660946)|STATEMENT_EXECUTE|[445]
-17:44:54.379 (2395663246)|HEAP_ALLOCATE|[445]|Bytes:4
-17:44:54.379 (2395667479)|VARIABLE_ASSIGNMENT|[445]|this.status_code|404|0x18620314
-17:44:54.379 (2395671965)|STATEMENT_EXECUTE|[439]
-17:44:54.379 (2395689165)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x403ac097
-17:44:54.379 (2395693720)|VARIABLE_ASSIGNMENT|[EXTERNAL]|value|"Not Found"
-17:44:54.379 (2395695988)|STATEMENT_EXECUTE|[450]
-17:44:54.379 (2395696753)|STATEMENT_EXECUTE|[450]
-17:44:54.379 (2395699415)|VARIABLE_ASSIGNMENT|[450]|this.error|"Not Found"|0x18620314
-17:44:54.379 (2395703369)|STATEMENT_EXECUTE|[440]
-17:44:54.379 (2395720404)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x2f9d10af
-17:44:54.379 (2395725366)|VARIABLE_ASSIGNMENT|[EXTERNAL]|value|"The searched resourc (16 more) ..."
-17:44:54.379 (2395727680)|STATEMENT_EXECUTE|[455]
-17:44:54.379 (2395728343)|STATEMENT_EXECUTE|[455]
-17:44:54.379 (2395731254)|VARIABLE_ASSIGNMENT|[455]|this.error_Description|"The searched resourc (16 more) ..."|0x18620314
-17:44:54.379 (2395737680)|CONSTRUCTOR_EXIT|[229]|01p0N00000ASuS7|<init>(Integer,String,String)|WebportalApiUtility_v1.RequestAPIException
-17:44:54.379 (2395748298)|EXCEPTION_THROWN|[229]|WebportalApiUtility_v1.RequestAPIException: Script-thrown exception
-17:44:54.379 (2395762304)|VARIABLE_SCOPE_BEGIN|[252]|ex|WebportalApiUtility_v1.RequestAPIException|true|false
-17:44:54.379 (2395780983)|VARIABLE_ASSIGNMENT|[252]|ex|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x56017595
-17:44:54.379 (2395783973)|STATEMENT_EXECUTE|[252]
-17:44:54.379 (2395784786)|STATEMENT_EXECUTE|[253]
-17:44:54.379 (2395807303)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x5e73a6e2
-17:44:54.379 (2395810446)|STATEMENT_EXECUTE|[444]
-17:44:54.379 (2395811280)|STATEMENT_EXECUTE|[444]
-17:44:54.379 (2395832825)|STATEMENT_EXECUTE|[254]
-17:44:54.379 (2395838112)|HEAP_ALLOCATE|[256]|Bytes:4
-17:44:54.379 (2395841543)|HEAP_ALLOCATE|[256]|Bytes:16
-17:44:54.379 (2395859686)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x485bebc3
-17:44:54.379 (2395862555)|STATEMENT_EXECUTE|[444]
-17:44:54.379 (2395863252)|STATEMENT_EXECUTE|[444]
-17:44:54.379 (2395876540)|HEAP_ALLOCATE|[257]|Bytes:3
-17:44:54.379 (2395898416)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0xf84920f
-17:44:54.379 (2395901526)|STATEMENT_EXECUTE|[449]
-17:44:54.379 (2395902206)|STATEMENT_EXECUTE|[449]
-17:44:54.379 (2395920417)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x5274f3b7
-17:44:54.379 (2395923295)|STATEMENT_EXECUTE|[454]
-17:44:54.379 (2395923980)|STATEMENT_EXECUTE|[454]
-17:44:54.379 (2395929863)|CONSTRUCTOR_ENTRY|[256]|01p0N00000ASuS7|<init>(String,String,String)|WebportalApiUtility_v1.ErrorMessage
-17:44:54.379 (2395937256)|VARIABLE_SCOPE_BEGIN|[1765]|this|WebportalApiUtility_v1.ErrorMessage|true|false
-17:44:54.379 (2395956909)|VARIABLE_ASSIGNMENT|[1765]|this|{}|0x11f31bad
-17:44:54.379 (2395959715)|VARIABLE_SCOPE_BEGIN|[1765]|statusCode|String|false|false
-17:44:54.379 (2395963589)|VARIABLE_ASSIGNMENT|[1765]|statusCode|"404"
-17:44:54.379 (2395966170)|VARIABLE_SCOPE_BEGIN|[1765]|error|String|false|false
-17:44:54.379 (2395969850)|VARIABLE_ASSIGNMENT|[1765]|error|"Not Found"
-17:44:54.379 (2395971925)|VARIABLE_SCOPE_BEGIN|[1765]|errorDescription|String|false|false
-17:44:54.379 (2395976125)|VARIABLE_ASSIGNMENT|[1765]|errorDescription|"The searched resourc (16 more) ..."
