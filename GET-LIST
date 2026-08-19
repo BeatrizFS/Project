@@ -1,0 +1,74 @@
+private static void handleGet() {
+        try {
+            WebportalAPITokenAuthentication_v1.parseAndValidateSecurityToken(
+                RestContext.request,
+                new Set<String>{
+                    'urn:axa.partners.sales.enterprise.transversal.benefits_configuration.benefit_packages.read_only',
+                    'urn:axa.partners.benefits_platform.read_only'
+                }
+            );
+
+            Map<String, String> requestParams = RestContext.request.params;
+            Map<String, Integer> paginationParams = validateGetRequest(requestParams);
+
+            Integer startIndex = paginationParams.get('start_index');
+            Integer maxResults = paginationParams.get('max_results');
+
+            List<ServiceContract> benefitPackages = [
+                SELECT Id, Package_Status__c, Product_Reference__c, StartDate, EndDate, Amount_of_Policies__c
+                FROM ServiceContract
+                WHERE RecordType.DeveloperName = :BENEFIT_PACKAGE_RECORD_TYPE
+                ORDER BY CreatedDate DESC
+                LIMIT :maxResults OFFSET :startIndex
+            ];
+
+            RestContext.response.statusCode = 200;
+            RestContext.response.addHeader('Content-Range', WebportalApiUtility_v1.getContentRangeHeader(startIndex, benefitPackages.size(), benefitPackages.size()));
+            RestContext.response.responseBody = Blob.valueOf(JSON.serializePretty(buildBenefitPackageListResponse(benefitPackages), true));
+
+        } catch (WebportalApiUtility_v1.RequestAPIException ex) {
+            RestContext.response.statusCode = ex.status_code;
+            RestContext.response.responseBody = Blob.valueOf(
+                JSON.serializePretty(
+                    new WebportalApiUtility_v1.ErrorMessage(
+                        String.valueOf(ex.status_code),
+                        ex.error,
+                        ex.error_description
+                    )
+                )
+            );
+        } catch(Exception ex) {
+            System.debug(LoggingLevel.INFO, 'Exception type: ' + ex.getTypeName());
+            System.debug(LoggingLevel.INFO, 'Exception stack tracing: ' + ex.getStackTraceString());
+            RestContext.response.statusCode = 500;
+            RestContext.response.responseBody = Blob.valueOf(
+                JSON.serializePretty(
+                    new WebportalApiUtility_v1.ErrorMessage('500', 'Internal Server Error', 'Unexpected error retrieving benefit packages: ' + ex.getMessage())
+                )
+            );
+        }
+    }
+
+    private static Map<String, Integer> validateGetRequest(Map<String, String> requestParams) {
+        Map<String, Integer> paginationParams = WebportalApiUtility_v1.validatePaginationQueryParams(requestParams, 100);
+
+        if (paginationParams.get('start_index') > 2000) {
+            throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'start_index cannot be greater than 2000.');
+        }
+
+        return paginationParams;
+    }
+
+benefit_packages	GET	List the packages, paginated.
+9. GET /benefit_packages — list
+Response 200 with a bare JSON array of SimplifiedBenefitPackage, encrypted.
+
+start_index defaults to 0, max_results defaults to 100 and is capped at 100 by the contract. Both are validated as integers within range; out-of-range yields 400.
+Translated to LIMIT :maxResults OFFSET :startIndex, ordered by CreatedDate DESC so pagination is stable and the newest packages surface first.
+OFFSET in SOQL is hard-limited to 2000 by the platform. A start_index above 2000 returns 400 bad_request stating the pagination limit rather than a platform exception. With max_results capped at 100, the reachable window is the 2100 most recent packages of a bank; beyond that the contract offers no cursor and no filter to narrow the set.
+The response carries no total count, because BenefitPackageList has no envelope. A consumer cannot compute the number of pages from the response; it detects the end by receiving fewer than max_results items. Recorded as R4.
+One query, single line, selective on AccountId, with the fields of SimplifiedBenefitPackage plus the status:
+
+Operation	SOQL	DML	JWE operations
+GET list	2 (agent, packages)	0	1 encrypt
+
