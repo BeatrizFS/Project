@@ -1,0 +1,1237 @@
+@RestResource(urlMapping = '/specific/visagateway/v3/claims/*/reimbursements/*')
+global without sharing class WebportalClaimsAPIReimbursements_V3 extends WebportalAPIBase_v1 {
+    private static final String AXA_BENEFICIARY_NAME = 'AXA ASSISTANCE USA INC';
+	private static final String AXA_BANK_NAME = 'Palla Bank';
+	private static final String AXA_BANK_STREET_ADDRESS = 'Teaneck Road.';
+	private static final String AXA_BANK_POSTAL_CODE = '07666';
+	private static final String AXA_BANK_LOCALITY = 'Teaneck';
+	private static final String AXA_BANK_COUNTRY = 'US';
+	private static final String AXA_BANK_SUBDIVISION = '855';
+	private static final String AXA_BANK_STATE = 'NJ';
+	private static final String AXA_ACCOUNT_NUMBER = '2000527117';
+	private static final String AXA_ACCOUNT_WIRE_CODE = '021214273';
+	private static final String AXA_ACCOUNT_WIRE_CODE_TYPE = 'ABA';	
+
+	@HttpPost
+	global static void postHandler() {
+		new WebportalClaimsAPIReimbursements_V3().doPost();
+	}
+
+	@HttpPatch
+	global static void patchHandler() {
+		new WebportalClaimsAPIReimbursements_V3().doPatch();
+	}
+	
+	@HttpGet
+	global static void getHandler() {
+		new WebportalClaimsAPIReimbursements_V3().doGet();
+	}
+
+	@HttpDelete
+	global static void deleteHandler() {
+		new WebportalClaimsAPIReimbursements_V3().doDelete();
+	}
+
+	public override void doPost() {
+		try {
+			RestContext.response.addHeader('Content-Type', 'application/json');
+
+			WebportalAPITokenAuthentication_v1.AccessTokenData accessTokenData =
+                WebportalAPITokenAuthentication_v1.parseAndValidateSecurityToken(
+                    RestContext.Request,
+                    new Set<String> {
+                        'urn:axa.partners.sales.certificates.creation_request',
+                        'urn:axa.partners.sales.individual.certificates.write',
+                        'urn:axa.partners.insurance.claims.write',
+                        'urn:axa.assistance.travel.certificates.creation_request',
+                        'urn:axa.partners.benefits_platform.write'
+                    }
+                );
+
+			WebportalAPITokenAuthentication_v1.ClientAccessConfiguration clientAccessConfig = WebportalAPITokenAuthentication_v1.getClientConfiguration(accessTokenData);
+
+            ReimbusermentRequest request;
+            String jsonRequestBody;
+            
+            String clientId = accessTokenData.aud;
+            Client_Key__c key = [SELECT AES_Key__c, AES_IV__c, Mac_Key__c, Private_RSA_Key__c, RSA_Key__c, Encryption_Scheme__c, CEK_Scheme__c, KID__c FROM Client_Key__c WHERE ClientID__c = :clientId];
+            
+            JSONWebEncryption.JOSEHeader header = new JSONWebEncryption.JOSEHeader();
+            header.alg = key.CEK_Scheme__c;
+            header.enc = key.Encryption_Scheme__c;
+            header.kid = key.KID__c;
+            
+            JSONWebEncryption jwe = new JSONWebEncryption();
+            jwe.setProtectedHeader(header);
+            
+            if(key.CEK_Scheme__c == 'dir') {
+                jwe.setContentEncrytionKeySecret(key.Mac_Key__c + key.AES_Key__c);
+                jwe.setInitializationVector(key.AES_IV__c);
+            } else {
+                JSONWebEncryption.JWK jwkKey = (JSONWebEncryption.JWK) JSON.deserialize(key.Private_RSA_Key__c, JSONWebEncryption.JWK.class);
+                jwe.setCEKAlgorithmKey(jwkKey);
+            }
+            
+            EncryptedData encryptObj = (EncryptedData) JSON.deserializeStrict(RestContext.request.requestBody.toString(), EncryptedData.class);
+            
+            jsonRequestBody = jwe.decrypt(encryptObj.encrypted_data);
+            jsonRequestBody = jsonRequestBody.trim();
+            jsonRequestBody = WebportalApiUtility_v1.removeXMLInjections(jsonRequestBody);
+            jsonRequestBody = WebportalApiUtility_v1.removeHtmlInjection(jsonRequestBody);
+            
+			request = parseRequest(jsonRequestBody);
+			String claimId = extractCaseId(RestContext.request);
+
+			Account existingCustomer = getUserByCaseId(claimId);
+
+			WebportalAPITokenAuthentication_v1.validateClientAccess(clientAccessConfig, existingCustomer, existingCustomer.Customer_Identifier__c, null, accessTokenData);
+
+			validateRequest(request);
+
+			Case claim = [SELECT Id, Status, Status__c, BIN__r.Bank__r.Bank_ID__c, ContactID, CurrencyIsoCode, AccountId FROM Case WHERE Id =: claimId LIMIT 1];
+			if(claim == null) {
+				RestContext.response.statuscode = 404;
+				RestContext.response.responseBody = Blob.valueOf(JSON.serializePretty(new WebportalApiUtility_v1.ErrorMessage('404', 'not_found', 'Claim with ID ' + claimId + ' not found')));	
+			} else {
+				String bankid = insertBankInfo(request, claim, existingCustomer);
+				List<BankTransfer__c> reimbuserments = [SELECT Id, Bank_Account_Number__c, Account_Type__c, Bank_Street_Address__c, Bank_Postal_Code__c, Bank_Address_Locality__c, Bank_Address_Country__c, Bank_Address_Subdivision__c, Bank_Address_State__c, Bank_Code__c, Bank_Branch_Code__c, Name, BankAccountHolder_Street_Address__c, BankAccountHolder_Address_Postal_Code__c, BankAccountHolder_Address_Locality__c, BankAccountHolder_Address_Country__c, BankAccountHolder_Address_Subdivision__c, BankAccountHolder_Address_State__c, BankAccountHolder_is_politicaly_exposed__c, BankAccountHolder_Monthly_Income__c, BankAccountHolder_Monthly_Incom_Currenc__c, BankAccountHolder_Person_First_Name__c, BankAccountHolder_Person_Last_Name__c, BankAccountHolder_Person_Birth_Date__c, BankAccountHolder_Person_Gender__c, BankAccountHolder_Person_Nationalities__c, BankAccountHolder_Phone_Type__c, BankAccountHolder_Phone_International_Pr__c, BankAccountHolder_Phone_Number__c, BankAccountHolder_Profession__c, BankAccountHolder_Registration_Type__c, BankAccountHolder_Registration_Value__c, Case__c, Relationship__c, Is_Current_Account__c, Wire_Code_Type__c, Wire_Code_Value__c, Intermediary_Bank_Account_Number__c, Intermediary_Bank_Code__c, Intermediary_Bank_Name__c, Intermediary_Address_Country__c, Intermediary_Address_Locality__c, Intermediary_Address_Postal_Code__c, Intermediary_Address_State__c, Intermediary_Address_Subdivision__c, Intermediary_Street_Address__c, Intermediary_Wire_Code_Type__c, CreatedDate, Intermediary_Wire_Code_Value__c, BankAccountHolder_Person_Title__c, Case__r.CurrencyIsoCode, Codigo_de_Cuenta_Interbancario_pe__c FROM BankTransfer__c WHERE Id = :bankid];
+				
+				JSONWebEncryption jweEncryptResponse = new JSONWebEncryption();
+				jweEncryptResponse.setProtectedHeader(header);
+				
+				if(key.CEK_Scheme__c == 'dir') {
+					jweEncryptResponse.setContentEncrytionKeySecret(key.Mac_Key__c + key.AES_Key__c);
+					jweEncryptResponse.setInitializationVector(key.AES_IV__c);
+				} else {
+					JSONWebEncryption.JWK jwkKey = (JSONWebEncryption.JWK) JSON.deserialize(key.RSA_Key__c, JSONWebEncryption.JWK.class);
+					jweEncryptResponse.setCEKAlgorithmKey(jwkKey);
+				}
+
+				EncryptedData encryptObjResponse = new EncryptedData();
+				
+				String jsonResponse = JSON.serializePretty(getReimbusermentDetail(reimbuserments[0]), true);
+				jsonResponse = jsonResponse.replace('"currencyValue"','"currency"');
+				jsonResponse = jsonResponse.replace('"numberValue"','"number"');
+				jsonResponse = jsonResponse.replace('"dateValue"','"date"');
+
+				encryptObjResponse.encrypted_data = jweEncryptResponse.encrypt(jsonResponse);
+
+				RestContext.response.statuscode = 201;
+				RestContext.response.responseBody = Blob.valueOf(JSON.serialize(encryptObjResponse));
+			}
+		} catch(WebportalApiUtility_v1.RequestAPIException ex) {
+			RestContext.response.statuscode = ex.status_code;
+			RestContext.response.responseBody = Blob.valueOf(JSON.serializePretty(new WebportalApiUtility_v1.ErrorMessage(String.valueOf(String.valueOf(ex.status_code)), ex.error, ex.error_description)));
+		} catch(Exception ex) {
+			System.debug(Logginglevel.ERROR, 'Unexpected error creating the request: ' + ex.getMessage());
+			System.debug('Exception stack trace: ' + ex.getStackTraceString());
+			RestContext.response.statuscode = 500;
+			RestContext.response.responseBody = Blob.valueOf(JSON.serializePretty(new WebportalApiUtility_v1.ErrorMessage('500', 'internal_server_error', 'Unexpected error creating the request')));
+		}
+	}
+
+	public override void doPatch() {
+		try {
+			RestContext.response.addHeader('Content-Type', 'application/json');
+            System.debug(RestContext.request.requestBody.toString().trim());
+
+			WebportalAPITokenAuthentication_v1.AccessTokenData accessTokenData =
+                WebportalAPITokenAuthentication_v1.parseAndValidateSecurityToken(
+                    RestContext.Request,
+                    new Set<String> {
+                        'urn:axa.partners.sales.certificates.creation_request',
+                        'urn:axa.partners.sales.individual.certificates.write',
+                        'urn:axa.partners.insurance.claims.write',
+                        'urn:axa.assistance.travel.certificates.creation_request',
+                        'urn:axa.partners.benefits_platform.write'
+                    }
+                );
+
+			WebportalAPITokenAuthentication_v1.ClientAccessConfiguration clientAccessConfig = WebportalAPITokenAuthentication_v1.getClientConfiguration(accessTokenData);
+
+            ReimbusermentRequest request;
+            String jsonRequestBody;
+            
+            String clientId = accessTokenData.aud;
+            Client_Key__c key = [Select AES_Key__c, AES_IV__c, Mac_Key__c, Private_RSA_Key__c,RSA_Key__c, Encryption_Scheme__c, CEK_Scheme__c, KID__c from Client_Key__c where ClientID__c = :clientId];
+            
+            JSONWebEncryption.JOSEHeader header = new JSONWebEncryption.JOSEHeader();
+            header.alg = key.CEK_Scheme__c;
+            header.enc = key.Encryption_Scheme__c;
+            header.kid = key.KID__c;
+            
+            JSONWebEncryption jwe = new JSONWebEncryption();
+            jwe.setProtectedHeader(header);
+            
+            if(key.CEK_Scheme__c == 'dir') {
+                jwe.setContentEncrytionKeySecret(key.Mac_Key__c + key.AES_Key__c);
+                jwe.setInitializationVector(key.AES_IV__c);
+            } else {
+                JSONWebEncryption.JWK jwkKey = (JSONWebEncryption.JWK) JSON.deserialize(key.Private_RSA_Key__c, JSONWebEncryption.JWK.class);
+                jwe.setCEKAlgorithmKey(jwkKey);
+            }
+            
+            EncryptedData encryptObj = (EncryptedData) JSON.deserializeStrict(RestContext.request.requestBody.toString(), EncryptedData.class);
+            
+            jsonRequestBody = jwe.decrypt(encryptObj.encrypted_data);
+            jsonRequestBody = jsonRequestBody.trim();
+            jsonRequestBody = WebportalApiUtility_v1.removeXMLInjections(jsonRequestBody);
+            jsonRequestBody = WebportalApiUtility_v1.removeHtmlInjection(jsonRequestBody);
+			
+			request = parseRequest(jsonRequestBody);
+			
+			String claimId = extractCaseId(RestContext.request);
+			Account existingCustomer = getUserByCaseId(claimId);
+
+			if (accessTokenData != null && accessTokenData.customData != null && accessTokenData.customData.cn != null) {
+				WebportalAPITokenAuthentication_v1.validateClientAccess(clientAccessConfig, existingCustomer, existingCustomer.Customer_Identifier__c, null, accessTokenData);
+			}
+
+			validateRequest(request);
+
+			List<Case> claims = [Select Id, Status, Status__c, (Select Id, Underwriter_decision_type__c from Underwriter_decision__r) from Case where Id = :claimId];
+			if( claims.size() == 0 ) {
+				RestContext.response.statuscode = 404;
+				RestContext.response.responseBody = Blob.valueOf(JSON.serializePretty(new WebportalApiUtility_v1.ErrorMessage('404', 'not_found', 'Claim with ID ' + claimId + ' not found')));	
+			} else {
+				Case claim = claims[0];
+				if( claim.Status != 'Pending Send' || claim.Underwriter_decision__r.size() > 0 ) {
+					RestContext.response.statuscode = 400;
+						RestContext.response.responseBody = Blob.valueOf(JSON.serializePretty(new WebportalApiUtility_v1.ErrorMessage('400', 'bad_request', 'The reimbuserment information cannot be updated. There are active payments associated to it.')));
+				} else {
+					String reimsbursementId = RestContext.request.requestURI.substringAfter('/reimbursements/');
+					if( String.isBlank( reimsbursementId ) ) {
+						RestContext.response.statuscode = 400;
+							RestContext.response.responseBody = Blob.valueOf(JSON.serializePretty(new WebportalApiUtility_v1.ErrorMessage('400', 'bad_request', 'The reimbuserment ID cannot be blank.')));
+					} else {
+							List<BankTransfer__c> reimbuserments = [SELECT Id, Bank_Account_Number__c, Account_Type__c, Bank_Street_Address__c, Bank_Postal_Code__c, Bank_Address_Locality__c, Bank_Address_Country__c, Bank_Address_Subdivision__c, Bank_Address_State__c, Bank_Code__c, Bank_Branch_Code__c, Name, BankAccountHolder_Street_Address__c, BankAccountHolder_Address_Postal_Code__c, BankAccountHolder_Address_Locality__c, BankAccountHolder_Address_Country__c, BankAccountHolder_Address_Subdivision__c, BankAccountHolder_Address_State__c, BankAccountHolder_is_politicaly_exposed__c, BankAccountHolder_Monthly_Income__c, BankAccountHolder_Monthly_Incom_Currenc__c, BankAccountHolder_Person_First_Name__c, BankAccountHolder_Person_Last_Name__c, BankAccountHolder_Person_Birth_Date__c, BankAccountHolder_Person_Gender__c, BankAccountHolder_Person_Nationalities__c, BankAccountHolder_Phone_Type__c, BankAccountHolder_Phone_International_Pr__c, BankAccountHolder_Phone_Number__c, BankAccountHolder_Profession__c, BankAccountHolder_Registration_Type__c, BankAccountHolder_Registration_Value__c, Case__c, Relationship__c, Is_Current_Account__c, Wire_Code_Type__c, Wire_Code_Value__c, Intermediary_Bank_Account_Number__c, Intermediary_Bank_Code__c, Intermediary_Bank_Name__c, Intermediary_Address_Country__c, Intermediary_Address_Locality__c, Intermediary_Address_Postal_Code__c, Intermediary_Address_State__c, Intermediary_Address_Subdivision__c, Intermediary_Street_Address__c, Intermediary_Wire_Code_Type__c, CreatedDate, Intermediary_Wire_Code_Value__c, BankAccountHolder_Person_Title__c, Case__r.CurrencyIsoCode, Codigo_de_Cuenta_Interbancario_pe__c FROM BankTransfer__c WHERE Case__c = :claimId AND Id = :reimsbursementId];
+						
+						if( reimbuserments.size() == 0 ) {
+							RestContext.response.statuscode = 404;
+								RestContext.response.responseBody = Blob.valueOf(JSON.serializePretty(new WebportalApiUtility_v1.ErrorMessage('404', 'not_found', 'Reimbursement with ID ' + reimsbursementId + ' not found')));	
+						} else {
+							
+							updateBankInfo(request, reimbuserments[0]);
+							
+							/*reimbuserments = [Select Id, Bank_Account_Number__c, Account_Type__c, Bank_Street_Address__c, Bank_Postal_Code__c, Bank_Address_Locality__c, Bank_Address_Country__c, Bank_Address_Subdivision__c, Bank_Address_State__c, Bank_Code__c, Bank_Branch_Code__c, Name, BankAccountHolder_Street_Address__c, BankAccountHolder_Address_Postal_Code__c, BankAccountHolder_Address_Locality__c, BankAccountHolder_Address_Country__c, BankAccountHolder_Address_Subdivision__c, BankAccountHolder_Address_State__c, BankAccountHolder_is_politicaly_exposed__c, BankAccountHolder_Monthly_Income__c, BankAccountHolder_Monthly_Incom_Currenc__c, BankAccountHolder_Person_First_Name__c, BankAccountHolder_Person_Last_Name__c, BankAccountHolder_Person_Birth_Date__c, BankAccountHolder_Person_Gender__c, BankAccountHolder_Person_Nationalities__c, BankAccountHolder_Phone_Type__c, BankAccountHolder_Phone_International_Pr__c, BankAccountHolder_Phone_Number__c, BankAccountHolder_Profession__c, BankAccountHolder_Registration_Type__c, BankAccountHolder_Registration_Value__c, Case__c, Relationship__c, Is_Current_Account__c, Wire_Code_Type__c, Wire_Code_Value__c, Intermediary_Bank_Account_Number__c, Intermediary_Bank_Code__c, Intermediary_Bank_Name__c, Intermediary_Address_Country__c, Intermediary_Address_Locality__c, Intermediary_Address_Postal_Code__c, Intermediary_Address_State__c, Intermediary_Address_Subdivision__c, Intermediary_Street_Address__c, Intermediary_Wire_Code_Type__c, Intermediary_Wire_Code_Value__c, BankAccountHolder_Person_Title__c, Case__r.CurrencyIsoCode from BankTransfer__c where Case__c = :claimId and Id = :reimsbursementId];
+							String jsonResponse = JSON.serializePretty( getReimbusermentDetail(reimbuserments[0]), true );
+							jsonResponse = jsonResponse.replace('"currencyValue"','"currency"');
+							jsonResponse = jsonResponse.replace('"numberValue"','"number"');
+							jsonResponse = jsonResponse.replace('"dateValue"','"date"');*/
+				
+							RestContext.response.statuscode = 204;
+							//RestContext.response.responseBody = Blob.valueOf(jsonResponse);
+						}
+					}
+				}
+			}
+
+		} catch(WebportalApiUtility_v1.RequestAPIException ex) {
+			RestContext.response.statuscode = ex.status_code;
+			RestContext.response.responseBody = Blob.valueOf(JSON.serializePretty(new WebportalApiUtility_v1.ErrorMessage(String.valueOf(ex.status_code), ex.error, ex.error_description)));
+		} catch(Exception ex) {
+			System.debug(Logginglevel.ERROR, 'Unexpected error creating the request: ' + ex.getMessage());
+			System.debug('Exception stack trace: ' + ex.getStackTraceString());
+			RestContext.response.statuscode = 500;
+			RestContext.response.responseBody = Blob.valueOf(JSON.serializePretty(new WebportalApiUtility_v1.ErrorMessage('500', 'internal_server_error', 'Unexpected error creating the request')));
+		}
+	}
+
+	public override void doGet() {
+		try {
+			RestContext.response.addHeader('Content-Type', 'application/json');
+
+			WebportalAPITokenAuthentication_v1.AccessTokenData accessTokenData =
+                WebportalAPITokenAuthentication_v1.parseAndValidateSecurityToken(
+                    RestContext.Request,
+                    new Set<String> {
+                        'urn:axa.partners.sales.certificates.creation_request',
+                        'urn:axa.partners.sales.individual.certificates.write',
+                        'urn:axa.partners.insurance.claims.read_only',
+                        'urn:axa.partners.insurance.claims.write',
+                        'urn:axa.assistance.travel.certificates.creation_request',
+                        'urn:axa.partners.benefits_platform.read_only'
+                    }
+                );
+
+			WebportalAPITokenAuthentication_v1.ClientAccessConfiguration clientAccessConfig = WebportalAPITokenAuthentication_v1.getClientConfiguration(accessTokenData);
+
+			String claimId = extractCaseId(RestContext.request);
+			Account existingCustomer = getUserByCaseId(claimId);
+
+			if (accessTokenData != null && accessTokenData.customData != null && accessTokenData.customData.cn != null) {
+				WebportalAPITokenAuthentication_v1.validateClientAccess(clientAccessConfig, existingCustomer, existingCustomer.Customer_Identifier__c, null, accessTokenData);
+			}
+
+			//Fetching the case Id from URL
+			List<Case> claims = [Select Id from Case where Id = :claimId];
+			if( claims.size() == 0 ) {
+				RestContext.response.statuscode = 404;
+				RestContext.response.responseBody = Blob.valueOf(JSON.serializePretty(new WebportalApiUtility_v1.ErrorMessage('404', 'not_found', 'Claim with ID ' + claimId + ' not found')));	
+			} else {
+                
+				String reimsbursementId = RestContext.request.requestURI.substringAfter('/reimbursements/');
+                
+                
+                String clientId = accessTokenData.aud;
+                Client_Key__c key = [Select AES_Key__c, AES_IV__c, Mac_Key__c, Private_RSA_Key__c,RSA_Key__c, Encryption_Scheme__c, CEK_Scheme__c, KID__c from Client_Key__c where ClientID__c = :clientId];
+                
+                JSONWebEncryption.JOSEHeader header = new JSONWebEncryption.JOSEHeader();
+                header.alg = key.CEK_Scheme__c;
+                header.enc = key.Encryption_Scheme__c;
+                header.kid = key.KID__c;
+                
+                JSONWebEncryption jwe = new JSONWebEncryption();
+                jwe.setProtectedHeader( header );
+                
+                if( key.CEK_Scheme__c == 'dir' ) {
+                    jwe.setContentEncrytionKeySecret( key.Mac_Key__c + key.AES_Key__c );
+                    jwe.setInitializationVector( key.AES_IV__c );
+                } else {
+                    JSONWebEncryption.JWK jwkKey = (JSONWebEncryption.JWK) JSON.deserialize( key.RSA_Key__c, JSONWebEncryption.JWK.class );
+                    jwe.setCEKAlgorithmKey( jwkKey );
+                }
+                
+                EncryptedData encryptObj = new EncryptedData();
+                    
+				
+				if( String.isBlank( reimsbursementId ) ) {
+					List<BankTransfer__c> reimbuserments = [SELECT Id, CreatedDate, BankAccountHolder_Person_First_Name__c, BankAccountHolder_Person_Last_Name__c ,Intermediary_Bank_Name__c, Case__c, BankAccountHolder_Person_Title__c, Case__r.CurrencyIsoCode, Codigo_de_Cuenta_Interbancario_pe__c FROM BankTransfer__c WHERE Case__c = :claimId ORDER BY CreatedDate DESC LIMIT 10];
+					List<ReimbusermentResponse> reimbusermentsResponses = getReimbuserments( reimbuserments );
+                    
+					String jsonResponse = JSON.serialize( reimbusermentsResponses, true );
+					jsonResponse = jsonResponse.replace('"currencyValue"', '"currency"').replace('"numberValue"','"number"');
+                    
+                    encryptObj.encrypted_data = jwe.encrypt( jsonResponse );
+                    
+					RestContext.response.statuscode = 200;
+					RestContext.response.responseBody = Blob.valueOf( JSON.serialize( encryptObj ) );
+				} else {
+						List<BankTransfer__c> reimbuserments = [SELECT Id, CreatedDate, Bank_Account_Number__c, Account_Type__c, Bank_Street_Address__c, Bank_Postal_Code__c, Bank_Address_Locality__c, Bank_Address_Country__c, Bank_Address_Subdivision__c, Bank_Address_State__c, Bank_Code__c, Bank_Branch_Code__c, Name, BankAccountHolder_Street_Address__c, BankAccountHolder_Address_Postal_Code__c, BankAccountHolder_Address_Locality__c, BankAccountHolder_Address_Country__c, BankAccountHolder_Address_Subdivision__c, BankAccountHolder_Address_State__c, BankAccountHolder_is_politicaly_exposed__c, BankAccountHolder_Monthly_Income__c, BankAccountHolder_Monthly_Incom_Currenc__c, BankAccountHolder_Person_First_Name__c, BankAccountHolder_Person_Last_Name__c, BankAccountHolder_Person_Birth_Date__c, BankAccountHolder_Person_Gender__c, BankAccountHolder_Person_Nationalities__c, BankAccountHolder_Phone_Type__c, BankAccountHolder_Phone_International_Pr__c, BankAccountHolder_Phone_Number__c, BankAccountHolder_Profession__c, BankAccountHolder_Registration_Type__c, BankAccountHolder_Registration_Value__c, Case__c, Relationship__c, Is_Current_Account__c, Wire_Code_Type__c, Wire_Code_Value__c, Intermediary_Bank_Account_Number__c, Intermediary_Bank_Code__c, Intermediary_Bank_Name__c, Intermediary_Address_Country__c, Intermediary_Address_Locality__c, Intermediary_Address_Postal_Code__c, Intermediary_Address_State__c, Intermediary_Address_Subdivision__c, Intermediary_Street_Address__c, Intermediary_Wire_Code_Type__c, Intermediary_Wire_Code_Value__c, BankAccountHolder_Person_Title__c, Case__r.CurrencyIsoCode, Codigo_de_Cuenta_Interbancario_pe__c FROM BankTransfer__c WHERE Case__c = :claimId AND ID = :reimsbursementId];
+										
+					if( reimbuserments.size() == 0 ) {
+						RestContext.response.statuscode = 404;
+							RestContext.response.responseBody = Blob.valueOf(JSON.serializePretty(new WebportalApiUtility_v1.ErrorMessage('404', 'not_found', 'Reimbuserment with ID ' + reimsbursementId + ' not found')));						
+					} else {
+						RestContext.response.statuscode = 200;
+						String jsonResponse = JSON.serializePretty( getReimbusermentDetail(reimbuserments[0]), true );
+						jsonResponse = jsonResponse.replace('"currencyValue"', '"currency"').replace('"numberValue"','"number"');
+                        
+                        encryptObj.encrypted_data = jwe.encrypt( jsonResponse );
+                        
+						RestContext.response.responseBody = Blob.valueOf(JSON.serialize( encryptObj ));
+					}
+				}
+			}
+		} catch(WebportalApiUtility_v1.RequestAPIException ex) {
+			RestContext.response.statuscode = ex.status_code;
+			RestContext.response.responseBody = Blob.valueOf(JSON.serializePretty(new WebportalApiUtility_v1.ErrorMessage(String.valueOf(ex.status_code), ex.error, ex.error_description)));
+		} catch(Exception ex) {
+			System.debug(Logginglevel.ERROR, 'Unexpected error creating the request: ' + ex.getMessage());
+			System.debug('Exception stack trace: ' + ex.getStackTraceString());
+			RestContext.response.statuscode = 500;
+			RestContext.response.responseBody = Blob.valueOf(JSON.serializePretty(new WebportalApiUtility_v1.ErrorMessage('500', 'internal_server_error', 'Unexpected error creating the request')));
+		}
+	}
+
+	public override void doDelete() {
+		try {
+			RestContext.response.addHeader('Content-Type', 'application/json');
+            System.debug(RestContext.request.requestBody.toString().trim());
+
+			WebportalAPITokenAuthentication_v1.AccessTokenData accessTokenData =
+                WebportalAPITokenAuthentication_v1.parseAndValidateSecurityToken(
+                    RestContext.Request,
+                    new Set<String> {
+                        'urn:axa.partners.sales.certificates.creation_request',
+                        'urn:axa.partners.sales.individual.certificates.write',
+                        'urn:axa.partners.insurance.claims.write',
+                        'urn:axa.assistance.travel.certificates.creation_request'
+                    }
+                );
+
+			WebportalAPITokenAuthentication_v1.ClientAccessConfiguration clientAccessConfig = WebportalAPITokenAuthentication_v1.getClientConfiguration(accessTokenData);
+
+			String claimId = extractCaseId(RestContext.request);
+			Account existingCustomer = getUserByCaseId(claimId);
+
+			if (accessTokenData != null && accessTokenData.customData != null && accessTokenData.customData.cn != null) {
+				WebportalAPITokenAuthentication_v1.validateClientAccess(clientAccessConfig, existingCustomer, existingCustomer.Customer_Identifier__c, null, accessTokenData);
+			}
+
+			List<Case> claims = [Select Id, Status, Status__c, (Select Id, Underwriter_decision_type__c from Underwriter_decision__r) from Case where Id = :claimId];
+			if( claims.size() == 0 ) {
+				RestContext.response.statuscode = 404;
+				RestContext.response.responseBody = Blob.valueOf(JSON.serializePretty(new WebportalApiUtility_v1.ErrorMessage('404', 'not_found', 'Claim with ID ' + claimId + ' not found')));	
+			} else {
+				Case claim = claims[0];
+				if( claim.Status != 'Pending Send' || claim.Underwriter_decision__r.size() > 0 ) {
+					RestContext.response.statuscode = 400;
+						RestContext.response.responseBody = Blob.valueOf(JSON.serializePretty(new WebportalApiUtility_v1.ErrorMessage('400', 'bad_request', 'The reimbuserment information cannot be deleted. There are active payments associated to it.')));
+				} else {
+					String reimsbursementId = RestContext.request.requestURI.substringAfter('/reimbursements/');
+					if( String.isBlank( reimsbursementId ) ) {
+						RestContext.response.statuscode = 400;
+							RestContext.response.responseBody = Blob.valueOf(JSON.serializePretty(new WebportalApiUtility_v1.ErrorMessage('400', 'bad_request', 'The reimbuserment ID cannot be blank.')));
+					} else {
+							List<BankTransfer__c> reimsbursements = [SELECT Id FROM BankTransfer__c WHERE ID = :reimsbursementId];
+						if( reimsbursements.size() == 0 ) {
+							RestContext.response.statuscode = 404;
+								RestContext.response.responseBody = Blob.valueOf(JSON.serializePretty(new WebportalApiUtility_v1.ErrorMessage('404', 'not_found', 'Reimbursement with ID ' + reimsbursementId + ' not found')));	
+						} else {
+							delete reimsbursements;
+							RestContext.response.statuscode = 204;
+						}
+					}
+				}
+			}
+
+		} catch(WebportalApiUtility_v1.RequestAPIException ex) {
+			RestContext.response.statuscode = ex.status_code;
+			RestContext.response.responseBody = Blob.valueOf(JSON.serializePretty(new WebportalApiUtility_v1.ErrorMessage(String.valueOf(ex.status_code), ex.error, ex.error_description)));
+		} catch(Exception ex) {
+			System.debug(Logginglevel.ERROR, 'Unexpected error creating the request: ' + ex.getMessage());
+			System.debug('Exception stack trace: ' + ex.getStackTraceString());
+			RestContext.response.statuscode = 500;
+			RestContext.response.responseBody = Blob.valueOf(JSON.serializePretty(new WebportalApiUtility_v1.ErrorMessage('500', 'internal_server_error', 'Unexpected error creating the request')));
+		}		
+	}
+
+	private Account getUserByCaseId(String claimId) {
+		Account customer;
+		List<Case> claims = [Select Id, ContactId from Case where Id = :claimId LIMIT 1];
+		if (claims.size() > 0) {
+			Case claim = claims[0];
+			System.debug(claim.ContactId);
+			if (claim.ContactId != null) {
+				List<Account> accountsFound = [SELECT id, partner_cd__c, Customer_Identifier__c, PersonContactId, FirstName, LastName, PersonMailingCountry, PersonBirthdate FROM Account WHERE PersonContactId =: claim.ContactId AND Inactive__c = false LIMIT 1];
+				customer = accountsFound[0];
+			} else {
+				throw new WebportalApiUtility_v1.RequestAPIException(404, 'not_found', 'case has no related contact');
+			}
+		} else {
+			System.debug('CASE NOT FOUND>>> ' + claimId);
+			throw new WebportalApiUtility_v1.RequestAPIException(404, 'not_found', 'case with id ' + claimId + ' not found');
+		}
+
+		return customer;
+	}
+
+	private string insertBankInfo(ReimbusermentRequest request, Case claim, Account customer) {
+		BankTransfer__c bankTransfer = new BankTransfer__c();
+
+		String wireCodeType = request.beneficiary_account.preferred_transfer_type != null ? request.beneficiary_account.preferred_transfer_type : '' ;
+		bankTransfer.Case__c = claim.Id;
+
+		bankTransfer.Wire_Code_Type__c = wireCodeType;
+		bankTransfer.Wire_Code_Value__c = wireCodeType != 'OCT' ? request.beneficiary_account.routing_number : request.beneficiary_account.oct_information.palla_payment_method_id;	
+
+		bankTransfer.Is_Current_Account__c = request.beneficiary_account.is_current_account != null ? request.beneficiary_account.is_current_account : false;
+		bankTransfer.Account_Type__c = request.beneficiary_account.account_type;
+		bankTransfer.Name = wireCodeType != 'OCT' ? request.beneficiary_account.bank.name : AXA_BANK_NAME; 
+		bankTransfer.Bank_Code__c = wireCodeType != 'OCT' ? request.beneficiary_account.bank.bank_code : null;
+		bankTransfer.Bank_Branch_Code__c = wireCodeType != 'OCT' ? request.beneficiary_account.bank.branch_code : null;
+		
+		if(request.beneficiary_account.account_number != null && String.isNotBlank(request.beneficiary_account.account_number)) {
+			if(wireCodeType == 'CCI'){
+				String cciValue = request.beneficiary_account.account_number.replaceAll('[^0-9]', '');
+				bankTransfer.Codigo_de_Cuenta_Interbancario_pe__c = cciValue;
+				bankTransfer.Wire_Code_Value__c = cciValue;
+				bankTransfer.Bank_Account_Number__c = cciValue.substring(6, 18);
+			}else{
+				try {
+					ID bankAccountId = ID.valueOf(request.beneficiary_account.account_number);
+					Bank_Account__c bankAccount = [SELECT Id, Bank_Account_Number__c FROM Bank_Account__c WHERE Id = :bankAccountId];
+					bankTransfer.Bank_Account_Number__c = bankAccount.Bank_Account_Number__c;
+				} catch(Exception e) {
+					bankTransfer.Bank_Account_Number__c = wireCodeType != 'OCT' ? request.beneficiary_account.account_number : AXA_ACCOUNT_NUMBER;
+				}
+			}
+		}
+		
+		if (request.beneficiary_account.bank.address != null) {
+			bankTransfer.Bank_Street_Address__c = wireCodeType != 'OCT' ? request.beneficiary_account.bank.address.street_address : AXA_BANK_STREET_ADDRESS;
+			bankTransfer.Bank_Postal_Code__c = wireCodeType != 'OCT' ? (request.beneficiary_account.bank.address.postal_code != null ? request.beneficiary_account.bank.address.postal_code : null) : AXA_BANK_POSTAL_CODE;
+			bankTransfer.Bank_Address_Locality__c = wireCodeType != 'OCT' ? request.beneficiary_account.bank.address.locality : AXA_BANK_LOCALITY;
+			bankTransfer.Bank_Address_Country__c = wireCodeType != 'OCT' ? request.beneficiary_account.bank.address.country : AXA_BANK_COUNTRY;
+			bankTransfer.Bank_Address_Subdivision__c = wireCodeType != 'OCT' ? request.beneficiary_account.bank.address.subdivision : AXA_BANK_SUBDIVISION;
+			bankTransfer.Bank_Address_State__c = wireCodeType != 'OCT' ? request.beneficiary_account.bank.address.state : AXA_BANK_STATE;
+		}
+
+		bankTransfer.BankAccountHolder_Person_Title__c = request.beneficiary_account.holder.person.title;
+		
+		bankTransfer.BankAccountHolder_Person_First_Name__c = request.beneficiary_account.holder.person.first_name;
+		bankTransfer.BankAccountHolder_Person_Last_Name__c = request.beneficiary_account.holder.person.last_name;
+		bankTransfer.BankAccountHolder_Person_Birth_Date__c = request.beneficiary_account.holder.person.birth_date != null ? WebportalApiUtility_v1.parseDate(request.beneficiary_account.holder.person.birth_date) : null;
+		bankTransfer.BankAccountHolder_Person_Gender__c = request.beneficiary_account.holder.person.gender;
+		bankTransfer.BankAccountHolder_Person_Nationalities__c = request.beneficiary_account.holder.person.nationalities != null && request.beneficiary_account.holder.person.nationalities.size() > 0 ? request.beneficiary_account.holder.person.nationalities[0] : null;
+
+		if (request.beneficiary_account.holder.registrations != null && !request.beneficiary_account.holder.registrations.isEmpty()) {
+			Registration selectedRegistration = selectRegistrationForCountry(
+				request.beneficiary_account.holder.registrations,
+				request.beneficiary_account.bank != null && request.beneficiary_account.bank.address != null
+					? request.beneficiary_account.bank.address.country
+					: null
+			);
+
+			if (selectedRegistration != null) {
+				bankTransfer.BankAccountHolder_Registration_Type__c = selectedRegistration.registration_type;
+				bankTransfer.BankAccountHolder_Registration_Value__c = selectedRegistration.value;
+			}
+		}
+
+		bankTransfer.BankAccountHolder_Street_Address__c = request.beneficiary_account.holder.address.street_address;
+		bankTransfer.BankAccountHolder_Address_Postal_Code__c = request.beneficiary_account.holder.address.postal_code != null ? request.beneficiary_account.holder.address.postal_code : null;
+		bankTransfer.BankAccountHolder_Address_Locality__c = request.beneficiary_account.holder.address.locality;
+		bankTransfer.BankAccountHolder_Address_Country__c = request.beneficiary_account.holder.address.country;
+		bankTransfer.BankAccountHolder_Address_Subdivision__c = request.beneficiary_account.holder.address.subdivision;
+		bankTransfer.BankAccountHolder_Address_State__c = request.beneficiary_account.holder.address.state;
+		
+		bankTransfer.BankAccountHolder_is_politicaly_exposed__c = request.beneficiary_account.holder.is_politically_exposed != null && request.beneficiary_account.holder.is_politically_exposed ? 'Yes' : 'No';
+		bankTransfer.BankAccountHolder_Profession__c = request.beneficiary_account.holder.profession;
+		bankTransfer.BankAccountHolder_Monthly_Income__c = request.beneficiary_account.holder.monthly_income != null ? request.beneficiary_account.holder.monthly_income.value : 0;
+		bankTransfer.BankAccountHolder_Monthly_Incom_Currenc__c = request.beneficiary_account.holder.monthly_income != null && request.beneficiary_account.holder.monthly_income.currencyValue != null ? request.beneficiary_account.holder.monthly_income.currencyValue : 'USD';
+		bankTransfer.Relationship__c = request.beneficiary_account.holder.relationship;
+
+		bankTransfer.BankAccountHolder_Phone_Type__c = request.beneficiary_account.holder.phone.phone_type;
+		bankTransfer.BankAccountHolder_Phone_International_Pr__c = request.beneficiary_account.holder.phone.international_prefix;
+		bankTransfer.BankAccountHolder_Phone_Number__c = request.beneficiary_account.holder.phone.numberValue;
+
+		if (request.intermediary_account != null) {
+			bankTransfer.Intermediary_Bank_Account_Number__c = request.intermediary_account.account_number != null ? request.intermediary_account.account_number : null;
+			bankTransfer.Intermediary_Wire_Code_Type__c = request.intermediary_account.preferred_transfer_type;
+			bankTransfer.Intermediary_Wire_Code_Value__c = wireCodeType != 'OCT' ? request.intermediary_account.routing_number : request.intermediary_account.oct_information.palla_payment_method_id;
+			
+			if(request.intermediary_account.bank != null) {
+				bankTransfer.Intermediary_Bank_Name__c = request.intermediary_account.bank.name;
+				bankTransfer.Intermediary_Bank_Code__c = request.intermediary_account.bank.bank_code;
+
+				if(request.intermediary_account.bank.address != null) {
+					bankTransfer.Intermediary_Address_Country__c = request.intermediary_account.bank.address.country;
+					bankTransfer.Intermediary_Address_Locality__c = request.intermediary_account.bank.address.locality;
+					bankTransfer.Intermediary_Address_Postal_Code__c = request.intermediary_account.bank.address.postal_code != null ? request.intermediary_account.bank.address.postal_code : null;
+					bankTransfer.Intermediary_Address_State__c = request.intermediary_account.bank.address.state;
+					bankTransfer.Intermediary_Address_Subdivision__c = request.intermediary_account.bank.address.subdivision;
+					bankTransfer.Intermediary_Street_Address__c = request.intermediary_account.bank.address.street_address;
+				}
+			}
+		}
+
+		insert bankTransfer;
+
+		List<Person_Registration__c> newPersonRegistrationList = new List<Person_Registration__c>();
+
+		if (request.beneficiary_account.holder.registrations != null && request.beneficiary_account.holder.registrations.size() > 0) {
+			for (Registration registration : request.beneficiary_account.holder.registrations) {
+				Person_Registration__c personRegistration = new Person_Registration__c();
+				personRegistration.Claim__c = claim.Id;
+				personRegistration.Contact__c = claim.ContactId;
+				personRegistration.CurrencyIsoCode = claim.CurrencyIsoCode;
+				personRegistration.Customer__c = claim.AccountId;
+				personRegistration.Name = registration.registration_type;
+				personRegistration.Person_Name__c = request.beneficiary_account.holder.person.first_name + '' + request.beneficiary_account.holder.person.last_name;
+				personRegistration.Relation_to_Claim__c = 'Card Holder';
+				personRegistration.Value__c = registration.value;
+
+				newPersonRegistrationList.add(personRegistration);
+			}
+		}
+		insert newPersonRegistrationList;
+
+		List<Wire_Code__c> newWireCodes = new List<Wire_Code__c> ();
+
+		if(request.beneficiary_account.bank_identification_number != null) {
+			Wire_Code__c newWireCode = new Wire_Code__c();
+			newWireCode.Bank_Transfer__c = bankTransfer.Id;
+			newWireCode.Code_Type__c = 'SWIFT_BIC';
+			newWireCode.Value__c = request.beneficiary_account.bank_identification_number;
+			newWireCode.Relationship__c = 'Beneficiary';
+			newWireCodes.add(newWireCode);
+		}
+
+		if (request.intermediary_account != null && request.intermediary_account.bank_identification_number != null) {
+			Wire_Code__c newWireCode = new Wire_Code__c();
+			newWireCode.Bank_Transfer__c = bankTransfer.Id;
+			newWireCode.Code_Type__c = 'SWIFT_BIC';
+			newWireCode.Value__c = request.intermediary_account.bank_identification_number;
+			newWireCode.Relationship__c = 'intermediary';
+			newWireCodes.add(newWireCode);
+		}
+
+		if(wireCodeType == 'OCT') {
+			Wire_Code__c newWireCode = new Wire_Code__c();
+			newWireCode.Bank_Transfer__c = bankTransfer.Id;
+			newWireCode.Code_Type__c = AXA_ACCOUNT_WIRE_CODE_TYPE;
+			newWireCode.Value__c = AXA_ACCOUNT_WIRE_CODE;
+			newWireCodes.add(newWireCode);
+		}
+
+		if (newWireCodes.size() > 0) insert newWireCodes;
+
+		return bankTransfer.id;
+	}
+
+	private void updateBankInfo(ReimbusermentRequest request, BankTransfer__c bankTransfer) {
+		String wireCodeType = request.beneficiary_account.preferred_transfer_type != null ? request.beneficiary_account.preferred_transfer_type : bankTransfer.Wire_Code_Type__c ;
+		Boolean isOnBlackList = false;
+
+		bankTransfer.Wire_Code_Type__c = wireCodeType;
+		bankTransfer.Wire_Code_Value__c = wireCodeType != 'OCT' ? request.beneficiary_account.routing_number : request.beneficiary_account.oct_information.palla_payment_method_id;	
+		bankTransfer.Is_Current_Account__c = request.beneficiary_account.is_current_account != null ? request.beneficiary_account.is_current_account : bankTransfer.Is_Current_Account__c;
+		bankTransfer.Account_Type__c = request.beneficiary_account.account_type != null ? request.beneficiary_account.account_type : bankTransfer.Account_Type__c;
+		bankTransfer.Name = wireCodeType != 'OCT' ? (request.beneficiary_account.bank.name != null ? request.beneficiary_account.bank.name : bankTransfer.Name) : AXA_BANK_NAME; 
+		bankTransfer.Bank_Code__c = wireCodeType != 'OCT' ? (request.beneficiary_account.bank.bank_code != null ? request.beneficiary_account.bank.bank_code : bankTransfer.Bank_Code__c) : null;
+		bankTransfer.Bank_Branch_Code__c = wireCodeType != 'OCT' ? (request.beneficiary_account.bank.branch_code != null ? request.beneficiary_account.bank.branch_code : bankTransfer.Bank_Branch_Code__c) : null;
+		
+		if(request.beneficiary_account.account_number != null && String.isNotBlank(request.beneficiary_account.account_number)) {
+			if(wireCodeType == 'CCI'){
+				String cciValue = request.beneficiary_account.account_number.replaceAll('[^0-9]', '');
+				bankTransfer.Codigo_de_Cuenta_Interbancario_pe__c = cciValue;
+				bankTransfer.Bank_Account_Number__c = cciValue.substring(6, 18);
+			}else{
+				try {
+					ID bankAccountId = ID.valueOf(request.beneficiary_account.account_number);
+					Bank_Account__c bankAccount = [Select Id, Bank_Account_Number__c from Bank_Account__c where Id = :bankAccountId];
+					bankTransfer.Bank_Account_Number__c = bankAccount.Bank_Account_Number__c;
+				} catch(Exception e) {
+					bankTransfer.Bank_Account_Number__c = wireCodeType != 'OCT' ? request.beneficiary_account.account_number : AXA_ACCOUNT_NUMBER;
+				}
+			}
+		}
+
+		if (request.beneficiary_account.bank.address != null) {
+			bankTransfer.Bank_Street_Address__c = wireCodeType != 'OCT' ? (request.beneficiary_account.bank.address.street_address != null ? request.beneficiary_account.bank.address.street_address : bankTransfer.Bank_Street_Address__c) : AXA_BANK_STREET_ADDRESS;
+			bankTransfer.Bank_Postal_Code__c = wireCodeType != 'OCT' ? (request.beneficiary_account.bank.address.postal_code != null ? request.beneficiary_account.bank.address.postal_code : bankTransfer.Bank_Postal_Code__c) : AXA_BANK_POSTAL_CODE;
+			bankTransfer.Bank_Address_Locality__c = wireCodeType != 'OCT' ? (request.beneficiary_account.bank.address.locality != null ? request.beneficiary_account.bank.address.locality : bankTransfer.Bank_Address_Locality__c) : AXA_BANK_LOCALITY;
+			bankTransfer.Bank_Address_Country__c = wireCodeType != 'OCT' ? (request.beneficiary_account.bank.address.country != null ? request.beneficiary_account.bank.address.country : bankTransfer.Bank_Address_Country__c) : AXA_BANK_COUNTRY;
+			bankTransfer.Bank_Address_Subdivision__c = wireCodeType != 'OCT' ? (request.beneficiary_account.bank.address.subdivision != null ? request.beneficiary_account.bank.address.subdivision : bankTransfer.Bank_Address_Subdivision__c) : AXA_BANK_SUBDIVISION;
+			bankTransfer.Bank_Address_State__c = wireCodeType != 'OCT' ? (request.beneficiary_account.bank.address.state != null ? request.beneficiary_account.bank.address.state : bankTransfer.Bank_Address_State__c) : AXA_BANK_STATE;
+		}
+
+		bankTransfer.BankAccountHolder_Person_Title__c = request.beneficiary_account.holder.person.title;
+		
+		bankTransfer.BankAccountHolder_Person_First_Name__c = request.beneficiary_account.holder.person.first_name != null ? request.beneficiary_account.holder.person.first_name : bankTransfer.BankAccountHolder_Person_First_Name__c;
+		bankTransfer.BankAccountHolder_Person_Last_Name__c = request.beneficiary_account.holder.person.last_name != null ? request.beneficiary_account.holder.person.last_name : bankTransfer.BankAccountHolder_Person_Last_Name__c;
+		bankTransfer.BankAccountHolder_Person_Birth_Date__c = request.beneficiary_account.holder.person.birth_date != null ? WebportalApiUtility_v1.parseDate(request.beneficiary_account.holder.person.birth_date) : bankTransfer.BankAccountHolder_Person_Birth_Date__c;
+		bankTransfer.BankAccountHolder_Person_Gender__c = request.beneficiary_account.holder.person.gender != null ? request.beneficiary_account.holder.person.gender : bankTransfer.BankAccountHolder_Person_Gender__c;
+		bankTransfer.BankAccountHolder_Person_Nationalities__c = request.beneficiary_account.holder.person.nationalities != null && request.beneficiary_account.holder.person.nationalities.size() > 0 ? request.beneficiary_account.holder.person.nationalities[0] : bankTransfer.BankAccountHolder_Person_Nationalities__c;
+
+		if (request.beneficiary_account.holder.registrations != null && !request.beneficiary_account.holder.registrations.isEmpty()) {
+			Registration selectedRegistration = selectRegistrationForCountry(
+				request.beneficiary_account.holder.registrations,
+				request.beneficiary_account.bank != null && request.beneficiary_account.bank.address != null
+					? request.beneficiary_account.bank.address.country
+					: null
+			);
+
+			if (selectedRegistration != null) {
+				bankTransfer.BankAccountHolder_Registration_Type__c = selectedRegistration.registration_type != null ? selectedRegistration.registration_type : bankTransfer.BankAccountHolder_Registration_Type__c;
+				bankTransfer.BankAccountHolder_Registration_Value__c = selectedRegistration.value != null ? selectedRegistration.value : bankTransfer.BankAccountHolder_Registration_Value__c;
+			}
+		}
+
+		bankTransfer.BankAccountHolder_Street_Address__c = request.beneficiary_account.holder.address.street_address != null ? request.beneficiary_account.holder.address.street_address : bankTransfer.BankAccountHolder_Street_Address__c;
+		bankTransfer.BankAccountHolder_Address_Postal_Code__c = request.beneficiary_account.holder.address.postal_code != null ? request.beneficiary_account.holder.address.postal_code : bankTransfer.BankAccountHolder_Address_Postal_Code__c;
+		bankTransfer.BankAccountHolder_Address_Locality__c = request.beneficiary_account.holder.address.locality != null ? request.beneficiary_account.holder.address.locality : bankTransfer.BankAccountHolder_Address_Locality__c;
+		bankTransfer.BankAccountHolder_Address_Country__c = request.beneficiary_account.holder.address.country != null ? request.beneficiary_account.holder.address.country : bankTransfer.BankAccountHolder_Address_Country__c;
+		bankTransfer.BankAccountHolder_Address_Subdivision__c = request.beneficiary_account.holder.address.subdivision != null ? request.beneficiary_account.holder.address.subdivision : bankTransfer.BankAccountHolder_Address_Subdivision__c;
+		bankTransfer.BankAccountHolder_Address_State__c = request.beneficiary_account.holder.address.state != null ? request.beneficiary_account.holder.address.state : bankTransfer.BankAccountHolder_Address_State__c;
+		
+		bankTransfer.BankAccountHolder_is_politicaly_exposed__c = request.beneficiary_account.holder.is_politically_exposed != null && request.beneficiary_account.holder.is_politically_exposed ? 'Yes' : bankTransfer.BankAccountHolder_is_politicaly_exposed__c;
+		bankTransfer.BankAccountHolder_Profession__c = request.beneficiary_account.holder.profession != null ? request.beneficiary_account.holder.profession : bankTransfer.BankAccountHolder_Profession__c;
+		bankTransfer.BankAccountHolder_Monthly_Income__c = request.beneficiary_account.holder.monthly_income != null ? request.beneficiary_account.holder.monthly_income.value : (bankTransfer.BankAccountHolder_Monthly_Income__c != null ? bankTransfer.BankAccountHolder_Monthly_Income__c : 0);
+		bankTransfer.BankAccountHolder_Monthly_Incom_Currenc__c = request.beneficiary_account.holder.monthly_income != null && request.beneficiary_account.holder.monthly_income.currencyValue != null ? request.beneficiary_account.holder.monthly_income.currencyValue : (bankTransfer.BankAccountHolder_Monthly_Incom_Currenc__c != null ? bankTransfer.BankAccountHolder_Monthly_Incom_Currenc__c : '');
+		bankTransfer.Relationship__c = request.beneficiary_account.holder.relationship != null ? request.beneficiary_account.holder.relationship : bankTransfer.Relationship__c;
+
+		bankTransfer.BankAccountHolder_Phone_Type__c = request.beneficiary_account.holder.phone.phone_type != null ? request.beneficiary_account.holder.phone.phone_type : bankTransfer.BankAccountHolder_Phone_Type__c;
+		bankTransfer.BankAccountHolder_Phone_International_Pr__c = request.beneficiary_account.holder.phone.international_prefix != null ? request.beneficiary_account.holder.phone.international_prefix : bankTransfer.BankAccountHolder_Phone_International_Pr__c;
+		bankTransfer.BankAccountHolder_Phone_Number__c = request.beneficiary_account.holder.phone.numberValue != null ? request.beneficiary_account.holder.phone.numberValue : bankTransfer.BankAccountHolder_Phone_Number__c;
+
+		if (request.intermediary_account != null) {
+			bankTransfer.Intermediary_Bank_Account_Number__c = request.intermediary_account.account_number != null ? request.intermediary_account.account_number : null;
+			bankTransfer.Intermediary_Wire_Code_Type__c = request.intermediary_account.preferred_transfer_type;
+			bankTransfer.Intermediary_Wire_Code_Value__c = wireCodeType != 'OCT' ? request.intermediary_account.routing_number : request.intermediary_account.oct_information.palla_payment_method_id;	
+			
+			if(request.intermediary_account.bank != null) {
+				bankTransfer.Intermediary_Bank_Code__c = request.intermediary_account.bank.bank_code;
+				bankTransfer.Intermediary_Bank_Name__c = request.intermediary_account.bank.name;
+
+				if(request.intermediary_account.bank.address != null) {
+					bankTransfer.Intermediary_Address_Country__c = request.intermediary_account.bank.address.country;
+					bankTransfer.Intermediary_Address_Locality__c = request.intermediary_account.bank.address.locality;
+					bankTransfer.Intermediary_Address_Postal_Code__c = request.intermediary_account.bank.address.postal_code != null ? request.intermediary_account.bank.address.postal_code : null;
+					bankTransfer.Intermediary_Address_State__c = request.intermediary_account.bank.address.state;
+					bankTransfer.Intermediary_Address_Subdivision__c = request.intermediary_account.bank.address.subdivision;
+					bankTransfer.Intermediary_Street_Address__c = request.intermediary_account.bank.address.street_address;
+				}
+			}
+		} else {
+			bankTransfer.Intermediary_Bank_Account_Number__c = null;
+			bankTransfer.Intermediary_Wire_Code_Type__c = null;
+			bankTransfer.Intermediary_Wire_Code_Value__c = null;
+			bankTransfer.Intermediary_Bank_Code__c = null;
+			bankTransfer.Intermediary_Bank_Name__c = null;
+			bankTransfer.Intermediary_Address_Country__c = null;
+			bankTransfer.Intermediary_Address_Locality__c = null;
+			bankTransfer.Intermediary_Address_Postal_Code__c = null;
+			bankTransfer.Intermediary_Address_State__c = null;
+			bankTransfer.Intermediary_Address_Subdivision__c = null;
+			bankTransfer.Intermediary_Street_Address__c = null;
+		}
+
+		update bankTransfer;
+
+		List<Wire_Code__c> newWireCodes = [Select Id, Bank_Transfer__c, Code_Type__c, Value__c from Wire_Code__c where Bank_Transfer__c = :bankTransfer.Id];
+		delete newWireCodes;
+
+		newWireCodes = new List<Wire_Code__c>();
+
+		if(request.beneficiary_account.bank_identification_number != null) {
+			Wire_Code__c newWireCode = new Wire_Code__c();
+			newWireCode.Bank_Transfer__c = bankTransfer.Id;
+			newWireCode.Code_Type__c = 'SWIFT_BIC';
+			newWireCode.Value__c = request.beneficiary_account.bank_identification_number;
+			newWireCode.Relationship__c = 'Beneficiary';
+			newWireCodes.add(newWireCode);
+		}
+
+		if (request.intermediary_account != null && request.intermediary_account.bank_identification_number != null) {
+			Wire_Code__c newWireCode = new Wire_Code__c();
+			newWireCode.Bank_Transfer__c = bankTransfer.Id;
+			newWireCode.Code_Type__c = 'SWIFT_BIC';
+			newWireCode.Value__c = request.intermediary_account.bank_identification_number;
+			newWireCode.Relationship__c = 'intermediary';
+			newWireCodes.add(newWireCode);
+		}
+		
+		if(wireCodeType == 'OCT') {
+			Wire_Code__c newWireCode = new Wire_Code__c();
+			newWireCode.Bank_Transfer__c = bankTransfer.Id;
+			newWireCode.Code_Type__c = AXA_ACCOUNT_WIRE_CODE_TYPE;
+			newWireCode.Value__c = AXA_ACCOUNT_WIRE_CODE;
+			newWireCodes.add(newWireCode);
+		}
+
+		if (newWireCodes.size() > 0) insert newWireCodes;
+	}
+
+	@TestVisible
+	private static Registration selectRegistrationForCountryForTest(List<Registration> registrations, String countryCode) {
+		return new WebportalClaimsAPIReimbursements_V3().selectRegistrationForCountry(registrations, countryCode);
+	}
+
+	private Registration selectRegistrationForCountry(List<Registration> registrations, String countryCode) {
+		if (registrations == null || registrations.isEmpty()) {
+			return null;
+		}
+
+		String normalizedCountry = String.isBlank(countryCode) ? '' : countryCode.trim().toUpperCase();
+		String countryRegistrationType;
+
+		if (normalizedCountry == 'AR') {
+			countryRegistrationType = 'CUIT';
+		} else if (normalizedCountry == 'CO' || normalizedCountry == 'PE' || normalizedCountry == 'CL' || normalizedCountry == 'EC') {
+			countryRegistrationType = 'ID_CARD';
+		}
+
+		if (countryRegistrationType != null) {
+			for (Integer i = registrations.size() - 1; i >= 0; i--) {
+				Registration registration = registrations[i];
+
+				if (registration != null && registration.registration_type != null && registration.registration_type.equalsIgnoreCase(countryRegistrationType)) {
+					return registration;
+				}
+			}
+		}
+
+		return registrations[0];
+	}
+
+	private List<ReimbusermentResponse> getReimbuserments(List<BankTransfer__c> reimbuserments) {
+		List<ReimbusermentResponse> reimbusermentsResponses = new List<ReimbusermentResponse>();
+
+		Set<String> claimsIDS = new Set<String>();
+		for(BankTransfer__c reimbuserment : reimbuserments) {
+			claimsIDS.add(reimbuserment.Case__c);
+		}
+
+		Map<String,List<Underwriter_decision__c>> paymentsMap = new Map<String,List<Underwriter_decision__c>>();
+		for(Underwriter_decision__c payment : [Select Id, Case__c, Amount_payed_USD__c, CurrencyIsoCode from Underwriter_decision__c where Case__c in :claimsIDS and Underwriter_decision_type__c in ('Approved','Paid') ]) {
+			if(!paymentsMap.containsKey(payment.Case__c)) {
+				paymentsMap.put(payment.Case__c, new List<Underwriter_decision__c>());
+			}
+
+			paymentsMap.get(payment.Case__c).add(payment);
+		}
+
+		for(BankTransfer__c reimbuserment : reimbuserments) {
+			ReimbusermentResponse reimbusermentResponse = new ReimbusermentResponse();
+			reimbusermentResponse.reimbursement_id = reimbuserment.Id;
+			String holderName = (reimbuserment.BankAccountHolder_Person_First_Name__c != null ? reimbuserment.BankAccountHolder_Person_First_Name__c : ' ') + ' ' + (reimbuserment.BankAccountHolder_Person_Last_Name__c != null ? reimbuserment.BankAccountHolder_Person_Last_Name__c : '');
+			reimbusermentResponse.beneficiary_holder_full_name = holderName;
+			reimbusermentResponse.intermediary_bank_name = reimbuserment.Intermediary_Bank_Name__c != null ? reimbuserment.Intermediary_Bank_Name__c : '';					
+			reimbusermentResponse.total_amount_reimbursed = new Amount();
+			reimbusermentResponse.total_amount_reimbursed.currencyValue = reimbuserment.Case__r.CurrencyIsoCode;
+			reimbusermentResponse.total_amount_reimbursed.value = 0;
+
+			if(paymentsMap.containsKey(reimbuserment.Case__c)) {
+				
+				for(Underwriter_decision__c payment : paymentsMap.get(reimbuserment.Case__c)) {
+					if (reimbuserment.CreatedDate >= Date.valueOf('2024-08-08')) {
+						reimbusermentResponse.total_amount_reimbursed.currencyValue = payment.CurrencyIsoCode;
+						reimbusermentResponse.total_amount_reimbursed.value += payment.Amount_payed_USD__c != null ? payment.Amount_payed_USD__c : reimbusermentResponse.total_amount_reimbursed.value;
+					}
+				}
+			}
+
+			reimbusermentsResponses.add(reimbusermentResponse);
+		}
+
+		return reimbusermentsResponses;
+	}
+
+	private ReimbusermentDetail getReimbusermentDetail(BankTransfer__c reimbursement) {
+		ReimbusermentDetail result = new ReimbusermentDetail();
+		result.reimbursement_id = reimbursement.Id;
+		result.beneficiary_account = new BeneficiaryAccount();
+		
+		String accountNumber = '';
+		if(reimbursement.Wire_Code_Type__c != null && reimbursement.Wire_Code_Type__c == 'CCI') {
+			accountNumber = reimbursement.Codigo_de_Cuenta_Interbancario_pe__c;
+		}else{
+			accountNumber = reimbursement.Bank_Account_Number__c;
+		}
+		result.beneficiary_account.account_number = maskAccountNumber(accountNumber);
+		result.beneficiary_account.account_type = reimbursement.Account_Type__c;
+
+		result.beneficiary_account.bank = new Bank();
+		if(reimbursement.Bank_Street_Address__c != null) {
+			result.beneficiary_account.bank.address = new Address();
+			result.beneficiary_account.bank.address.street_address = reimbursement.Bank_Street_Address__c;
+			result.beneficiary_account.bank.address.postal_code = reimbursement.Bank_Postal_Code__c != null ? reimbursement.Bank_Postal_Code__c : null;
+			result.beneficiary_account.bank.address.locality = reimbursement.Bank_Address_Locality__c;
+			result.beneficiary_account.bank.address.country = reimbursement.Bank_Address_Country__c;
+			result.beneficiary_account.bank.address.subdivision = reimbursement.Bank_Address_Subdivision__c;
+			result.beneficiary_account.bank.address.state = reimbursement.Bank_Address_State__c;
+		}
+
+		result.beneficiary_account.bank.bank_code = reimbursement.Bank_Code__c;
+		result.beneficiary_account.bank.branch_code = reimbursement.Bank_Branch_Code__c;
+		result.beneficiary_account.bank.name = reimbursement.Name;
+
+		result.beneficiary_account.holder = new Holder();
+		result.beneficiary_account.holder.address = new Address();
+		result.beneficiary_account.holder.address.street_address = reimbursement.BankAccountHolder_Street_Address__c;
+		result.beneficiary_account.holder.address.postal_code = reimbursement.BankAccountHolder_Address_Postal_Code__c != null ? reimbursement.BankAccountHolder_Address_Postal_Code__c : null;
+		result.beneficiary_account.holder.address.locality = reimbursement.BankAccountHolder_Address_Locality__c;
+		result.beneficiary_account.holder.address.country = reimbursement.BankAccountHolder_Address_Country__c;
+		result.beneficiary_account.holder.address.subdivision = reimbursement.BankAccountHolder_Address_Subdivision__c;
+		result.beneficiary_account.holder.address.state= reimbursement.BankAccountHolder_Address_State__c;
+
+		result.beneficiary_account.holder.is_politically_exposed = reimbursement.BankAccountHolder_is_politicaly_exposed__c != null && reimbursement.BankAccountHolder_is_politicaly_exposed__c == 'Yes' ? true : false;
+		
+		if(reimbursement.BankAccountHolder_Monthly_Income__c != null) {
+			result.beneficiary_account.holder.monthly_income = new MonthlyIncome();
+			result.beneficiary_account.holder.monthly_income.value = reimbursement.BankAccountHolder_Monthly_Income__c != null ? reimbursement.BankAccountHolder_Monthly_Income__c : 0;
+			result.beneficiary_account.holder.monthly_income.currencyValue = reimbursement.BankAccountHolder_Monthly_Incom_Currenc__c != null ? reimbursement.BankAccountHolder_Monthly_Incom_Currenc__c : 'USD' ;
+		}
+
+		result.beneficiary_account.holder.person = new Person();
+		result.beneficiary_account.holder.person.first_name = reimbursement.BankAccountHolder_Person_First_Name__c;
+		result.beneficiary_account.holder.person.last_name = reimbursement.BankAccountHolder_Person_Last_Name__c;
+		result.beneficiary_account.holder.person.birth_date = reimbursement.BankAccountHolder_Person_Birth_Date__c != null ? Datetime.newInstance(reimbursement.BankAccountHolder_Person_Birth_Date__c, Time.newInstance(12, 0, 0, 0)).format('yyyy-MM-dd') : null;
+		result.beneficiary_account.holder.person.gender = reimbursement.BankAccountHolder_Person_Gender__c;
+		result.beneficiary_account.holder.person.title = reimbursement.BankAccountHolder_Person_Title__c;
+		result.beneficiary_account.holder.person.nationalities = reimbursement.BankAccountHolder_Person_Nationalities__c != null ? new List<String> {reimbursement.BankAccountHolder_Person_Nationalities__c} : null;
+
+		result.beneficiary_account.holder.phone = new Phone();
+		result.beneficiary_account.holder.phone.phone_type = reimbursement.BankAccountHolder_Phone_Type__c;
+		result.beneficiary_account.holder.phone.international_prefix = reimbursement.BankAccountHolder_Phone_International_Pr__c;
+		result.beneficiary_account.holder.phone.numberValue = reimbursement.BankAccountHolder_Phone_Number__c;
+		
+		result.beneficiary_account.holder.profession = reimbursement.BankAccountHolder_Profession__c;
+		result.beneficiary_account.holder.registrations = new List<Registration>{ new Registration() };
+
+		result.beneficiary_account.holder.registrations[0].registration_type = reimbursement.BankAccountHolder_Registration_Type__c;
+		result.beneficiary_account.holder.registrations[0].value = reimbursement.BankAccountHolder_Registration_Value__c;
+
+		result.beneficiary_account.holder.relationship = reimbursement.Relationship__c;
+		
+		result.beneficiary_account.is_current_account = reimbursement.Is_Current_Account__c;
+		result.beneficiary_account.preferred_transfer_type = reimbursement.Wire_Code_Type__c != null ? reimbursement.Wire_Code_Type__c : '';
+		result.beneficiary_account.routing_number = reimbursement.Wire_Code_Value__c;
+		
+		if(reimbursement.Intermediary_Bank_Account_Number__c != null) {
+			result.intermediary_account = new IntermediaryAccount();
+			result.intermediary_account.account_number = reimbursement.Intermediary_Bank_Account_Number__c;
+			result.intermediary_account.bank = new Bank();
+			result.intermediary_account.bank.bank_code = reimbursement.Intermediary_Bank_Code__c;
+			result.intermediary_account.bank.name = reimbursement.Intermediary_Bank_Name__c;
+			result.intermediary_account.preferred_transfer_type = reimbursement.Intermediary_Wire_Code_Type__c;
+			result.intermediary_account.routing_number = reimbursement.Intermediary_Wire_Code_Value__c;
+			
+			result.intermediary_account.holder = new IntermediaryBankAccountHolderPatch();
+			
+			result.intermediary_account.bank.address = new Address();
+			result.intermediary_account.bank.address.country = reimbursement.Intermediary_Address_Country__c;
+			result.intermediary_account.bank.address.locality = reimbursement.Intermediary_Address_Locality__c;
+			result.intermediary_account.bank.address.postal_code = reimbursement.Intermediary_Address_Postal_Code__c != null ? reimbursement.Intermediary_Address_Postal_Code__c : '';
+			result.intermediary_account.bank.address.state = reimbursement.Intermediary_Address_State__c;
+			result.intermediary_account.bank.address.subdivision = reimbursement.Intermediary_Address_Subdivision__c;
+			result.intermediary_account.bank.address.street_address = reimbursement.Intermediary_Street_Address__c;
+			
+			List<Wire_Code__c> wireCodesIntermediary = [Select Code_Type__c, Value__c from Wire_Code__c where Bank_Transfer__c = :reimbursement.Id and Relationship__c = 'intermediary' LIMIT 1];
+			if(wireCodesIntermediary.size() > 0) {
+				result.intermediary_account.bank_identification_number = wireCodesIntermediary[0].Value__c != null && wireCodesIntermediary[0].Value__c.length() < 8 ? wireCodesIntermediary[0].Value__c.leftPad(8,'0') : wireCodesIntermediary[0].Value__c;
+			}
+		}
+		
+		if(reimbursement.Wire_Code_Type__c == 'OCT') {
+			result.beneficiary_account.oct_information = new OctInformation();
+			result.beneficiary_account.oct_information.palla_payment_method_id = reimbursement.Wire_Code_Value__c;
+			if(reimbursement.Intermediary_Bank_Account_Number__c != null) {
+				result.intermediary_account.oct_information = new OctInformation();
+				result.intermediary_account.oct_information.palla_payment_method_id = reimbursement.Wire_Code_Value__c;
+			}
+		}
+
+		List<Wire_Code__c> wireCodes = [Select Code_Type__c, Value__c from Wire_Code__c where Bank_Transfer__c = :reimbursement.Id and Relationship__c = 'Beneficiary' LIMIT 1];
+		if(wireCodes.size() > 0) {
+			result.beneficiary_account.bank_identification_number = wireCodes[0].Value__c != null && wireCodes[0].Value__c.length() < 8 ? wireCodes[0].Value__c.leftPad(8,'0') : wireCodes[0].Value__c;
+		}
+
+		result.total_amount_reimbursed = new TotalAmountReimbursed();
+		result.total_amount_reimbursed.currencyValue = reimbursement.Case__r.CurrencyIsoCode;
+		result.total_amount_reimbursed.value = 0;
+
+		for(Underwriter_decision__c payment : [Select Id, Case__c, Amount_payed_USD__c, CurrencyIsoCode from Underwriter_decision__c where Case__c = :reimbursement.Case__c and Underwriter_decision_type__c in ('Approved','Paid') ]) {
+			if (reimbursement.CreatedDate >= Date.valueOf('2024-08-08')) {
+				result.total_amount_reimbursed.currencyValue = payment.CurrencyIsoCode;
+				result.total_amount_reimbursed.value += payment.Amount_payed_USD__c != null ? payment.Amount_payed_USD__c : result.total_amount_reimbursed.value;
+			}
+		}
+
+		return result;
+	}
+
+	private ReimbusermentRequest parseRequest(string jsonRequestBody) {
+		jsonRequestBody = jsonRequestBody == null ? '' : jsonRequestBody;
+		jsonRequestBody = jsonRequestBody.replace('"currency"', '"currencyValue"');
+		jsonRequestBody = jsonRequestBody.replace('"number"', '"numberValue"');
+		jsonRequestBody = jsonRequestBody.replace('"date"', '"dateValue"');
+	
+		try {
+			return (ReimbusermentRequest) JSON.deserializeStrict(jsonRequestBody, ReimbusermentRequest.class);
+		}
+		catch(Exception ex) {
+			System.debug(Logginglevel.DEBUG, 'Error parsing JSON body: ' + ex.getMessage());
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. JSON deserialization hint: ' + ex.getMessage());
+		}
+	}
+
+	private string extractCaseId(RestRequest req) {
+		String requestURI = req.requestURI;
+		String claimId = requestURI.substringBetween('/claims/', '/reimbursements');
+
+		if (String.isBlank(claimId)) {
+			System.debug(Logginglevel.ERROR, 'Cannot get the case_id from the URI: ' + req.requestURI);
+			throw new WebportalApiUtility_v1.RequestAPIException(404, 'not_found', 'An invalid URL was provided');
+		}
+
+		return claimId;
+	}
+
+	private void validateRequest(ReimbusermentRequest reimbursement) {
+        if (reimbursement.beneficiary_account == null) {
+            throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.beneficiary_account is mandatory');
+        }
+        
+        if (reimbursement.beneficiary_account.holder == null) {
+            throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.beneficiary_account.holder is mandatory');
+        }
+		
+		if(reimbursement.beneficiary_account.bank_identification_number != null && reimbursement.beneficiary_account.bank_identification_number.length() > 11) {
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.beneficiary_account.bank_identification_number should NOT be longer than 11 characters');
+		}
+        
+        if (reimbursement.beneficiary_account.holder.person == null) {
+            throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.beneficiary_account.holder.person is mandatory');
+        }
+        
+        if (reimbursement.beneficiary_account.holder.registrations == null) {
+            throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.beneficiary_account.holder.registrations is mandatory');
+        }
+        
+        if (reimbursement.beneficiary_account.holder.address == null) {
+            throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request reimbursement.beneficiary_account.holder.address is mandatory');
+        }
+        
+        if (reimbursement.beneficiary_account.holder.phone == null) {
+            throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request reimbursement.beneficiary_account.holder.phone is mandatory');
+        }
+        
+        if (String.isBlank(reimbursement.beneficiary_account.holder.person.last_name)) {
+            throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.beneficiary_account.holder.person.last_name is mandatory');
+        }
+		
+        if (String.isBlank(reimbursement.beneficiary_account.holder.phone.numberValue)) {
+            throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.beneficiary_account.holder.phone.numberValue is mandatory');
+        }
+		
+		Set<String> supportedTransferTypes = new Set<String>{'ABA_RTN','CLABE','IBAN','SWIFT_BIC', 'OCT', 'CCI'};
+		
+		if(reimbursement.beneficiary_account.preferred_transfer_type != null && !supportedTransferTypes.contains(reimbursement.beneficiary_account.preferred_transfer_type.toUpperCase())) {
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.beneficiary_account.preferred_transfer_type should be ABA_RTN, CLABE, IBAN, SWIFT_BIC OR OCT');
+		}
+		
+		if(reimbursement.intermediary_account != null && reimbursement.intermediary_account.bank == null) {
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.intermediary_account.bank cannot be null');
+		}
+
+		if(reimbursement.intermediary_account != null && reimbursement.intermediary_account.bank != null && reimbursement.intermediary_account.bank.bank_code == null) {
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.intermediary_account.bank.bank_code cannot be null');
+		}
+
+		if(reimbursement.intermediary_account != null && reimbursement.intermediary_account.bank != null && reimbursement.intermediary_account.bank.branch_code == null) {
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.intermediary_account.bank.branch_code cannot be null');
+		}
+
+		if(reimbursement.intermediary_account != null && reimbursement.intermediary_account.preferred_transfer_type != null && !supportedTransferTypes.contains(reimbursement.intermediary_account.preferred_transfer_type.toUpperCase())) {
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. (reimbursement.intermediary_account.preferred_transfer_type should be ABA_RTN, CLABE, IBAN, SWIFT_BIC OR OCT');
+		}
+		
+		if(reimbursement.beneficiary_account != null && reimbursement.beneficiary_account.holder != null && reimbursement.beneficiary_account.holder.monthly_income != null && reimbursement.beneficiary_account.holder.monthly_income.value == null) {
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.beneficiary_account.holder.monthly_income.value must be a number');
+		}
+
+		if(reimbursement.beneficiary_account != null && reimbursement.beneficiary_account.holder != null && reimbursement.beneficiary_account.holder.monthly_income != null && String.isBlank(reimbursement.beneficiary_account.holder.monthly_income.currencyValue)) {
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.beneficiary_account.holder.monthly_income.currency cannot be blank');
+		}
+
+		if(reimbursement.beneficiary_account != null && reimbursement.beneficiary_account.holder != null && reimbursement.beneficiary_account.holder.monthly_income != null && reimbursement.beneficiary_account.holder.monthly_income.currencyValue.length() != 3) {
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.beneficiary_account.holder.monthly_income.currency must have 3 characters');
+		}
+
+		if(reimbursement.beneficiary_account != null && reimbursement.beneficiary_account.bank_identification_number != null && reimbursement.beneficiary_account.bank_identification_number.length() < 8) {
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.beneficiary_account.bank_identification_number should NOT be shorter than 8 characters');
+		}
+
+		if(reimbursement.beneficiary_account != null && reimbursement.beneficiary_account.bank_identification_number != null && reimbursement.beneficiary_account.bank_identification_number.length() > 11) {
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.beneficiary_account.bank_identification_number should NOT be bigger than 11 characters');
+		}
+
+		if(reimbursement.intermediary_account != null && reimbursement.intermediary_account.bank_identification_number != null && reimbursement.intermediary_account.bank_identification_number != null && reimbursement.intermediary_account.bank_identification_number.length() < 8) {
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.intermediary_account.bank_identification_number should NOT be shorter than 8 characters');
+		}
+
+		if(reimbursement.intermediary_account != null && reimbursement.intermediary_account.bank_identification_number != null && reimbursement.intermediary_account.bank_identification_number != null && reimbursement.intermediary_account.bank_identification_number.length() > 11) {
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.intermediary_account.bank_identification_number should NOT be bigger than 11 characters');
+		}
+		
+		if(reimbursement.beneficiary_account != null && reimbursement.beneficiary_account.account_number != null && reimbursement.beneficiary_account.account_number.length() > 34) {
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.beneficiary_account.account_number should NOT be bigger than 34 characters');
+		}
+
+		if(reimbursement.total_amount_reimbursed == null) {
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.total_amount_reimbursed is mandatory');
+		}
+
+		if(reimbursement.total_amount_reimbursed != null && reimbursement.total_amount_reimbursed.value == null) {
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.total_amount_reimbursed.value must be a number');
+		}
+
+		if(reimbursement.total_amount_reimbursed != null && String.isBlank(reimbursement.total_amount_reimbursed.currencyValue)) {
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.total_amount_reimbursed.currency cannot be blank');
+		}
+
+		if(reimbursement.total_amount_reimbursed != null && reimbursement.total_amount_reimbursed.currencyValue.length() != 3) {
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.total_amount_reimbursed.currency must have 3 characters');
+		}
+		
+		if(reimbursement.beneficiary_account != null && reimbursement.beneficiary_account.holder != null && reimbursement.beneficiary_account.holder.registrations != null) {
+			for(Registration registration : reimbursement.beneficiary_account.holder.registrations) {
+				if(registration.value != null && registration.value.length() > 20) {
+					throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.beneficiary_account.holder.registrations should NOT be bigger than 20 characters');
+				}
+			}
+		}
+
+		if(reimbursement.beneficiary_account != null && reimbursement.beneficiary_account.preferred_transfer_type != 'OCT' && reimbursement.beneficiary_account.account_number == null){
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.beneficiary_account.account_number cannot be blank');
+		}
+
+		if(reimbursement.beneficiary_account != null && reimbursement.beneficiary_account.preferred_transfer_type == 'OCT' && reimbursement.beneficiary_account.oct_information == null) {
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.beneficiary_account.oct_information cannot be blank');
+		}
+
+		if(reimbursement.beneficiary_account != null && reimbursement.beneficiary_account.preferred_transfer_type == 'OCT' && String.isBlank(reimbursement.beneficiary_account.oct_information.palla_payment_method_id)) {
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.beneficiary_account.oct_information.palla_payment_method_id cannot be blank');
+		}
+
+		if(reimbursement.intermediary_account != null && reimbursement.intermediary_account.preferred_transfer_type != 'OCT' && reimbursement.intermediary_account.account_number == null){
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.intermediary_account.account_number cannot be blank');
+		}
+
+		if(reimbursement.intermediary_account != null && reimbursement.intermediary_account.preferred_transfer_type == 'OCT' && reimbursement.intermediary_account.oct_information == null) {
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.intermediary_account.oct_information cannot be blank');
+		}
+
+		if(reimbursement.intermediary_account != null && reimbursement.intermediary_account.preferred_transfer_type == 'OCT' && String.isBlank(reimbursement.intermediary_account.oct_information.palla_payment_method_id)) {
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.intermediary_account.oct_information.palla_payment_method_id cannot be blank');
+		}
+
+		if(reimbursement.beneficiary_account != null && reimbursement.beneficiary_account.holder != null && reimbursement.beneficiary_account.holder.address != null && reimbursement.beneficiary_account.holder.address.postal_code != null && reimbursement.beneficiary_account.holder.address.postal_code.length() > 20) {
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.beneficiary_account.holder.address.postal_code should NOT be longer than 20 characters');
+		}
+
+		if(reimbursement.beneficiary_account != null && reimbursement.beneficiary_account.bank != null && reimbursement.beneficiary_account.bank.address != null && reimbursement.beneficiary_account.bank.address.postal_code != null && reimbursement.beneficiary_account.bank.address.postal_code.length() > 20) {
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.beneficiary_account.bank.address.postal_code should NOT be longer than 20 characters');
+		}
+
+		if(reimbursement.intermediary_account != null && reimbursement.intermediary_account.bank != null && reimbursement.intermediary_account.bank.address != null && reimbursement.intermediary_account.bank.address.postal_code != null && reimbursement.intermediary_account.bank.address.postal_code.length() > 20) {
+			throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Invalid request body. reimbursement.intermediary_account.bank.address.postal_code should NOT be longer than 20 characters');
+		}
+	}
+
+	private static String maskAccountNumber(String accountNumber) {
+        Integer maskSize;
+		String maskedAccountNumber = null;
+
+		if(accountNumber != null) {
+
+			if(accountNumber.length() <= 4) {
+				maskSize = 1;
+			} else {
+				maskSize = accountNumber.length() - 3;
+			}
+
+			maskedAccountNumber = accountNumber.left(1) + '*'.repeat(maskSize) + accountNumber.right(2);
+		}
+        
+		return maskedAccountNumber;
+	}
+
+	public class Address {
+		public String street_address;
+		public String postal_code;
+		public String locality;
+		public String country;
+		public String subdivision;
+		public String state;
+		public String complement;
+	}
+    
+	public class Bank {
+		public String name;
+		public String bank_code;
+		public String branch_code;
+		public Address address;
+	}
+    
+	public class Person {
+		public String first_name;
+		public String last_name;
+		public String birth_date;
+		public String gender;
+		public String title;
+		public List<String> nationalities;
+	}
+    
+    public class Phone {
+        public String phone_type;
+        public String international_prefix;
+        public String numberValue;
+    }
+    
+    public class Registration {
+        public String registration_type;
+        public String value;
+    }
+    
+	public class MonthlyIncome {
+		public double value;
+		public String currencyValue;
+	}
+    
+    public class Holder {
+        public Person person;
+        public Address address;
+        public Phone phone;
+        public List<Registration> registrations;
+        public String relationship;
+        public boolean is_politically_exposed;
+        public String profession;
+        public MonthlyIncome monthly_income;
+    }
+    
+	public class BeneficiaryAccount {
+		public Bank bank;
+		public Holder holder;
+		public boolean is_current_account;
+		public String account_type;
+		public String preferred_transfer_type;
+		public String account_number;
+		public OctInformation oct_information;
+		public String currencyValue;
+		public String routing_number;
+		public String bank_identification_number;
+	}
+    
+	public class IntermediaryAccount {
+		public Bank bank;
+		public IntermediaryBankAccountHolderPatch holder;
+		public String preferred_transfer_type;
+		public String account_number;
+		public OctInformation oct_information;
+		public String currencyValue;
+		public String routing_number;
+		public String bank_identification_number;
+	}
+
+	public class IntermediaryBankAccountHolderPatch {
+		public Company company;
+		public Address address;
+		public Phone phone;
+	}
+
+	public class Company {
+		public String name;
+	}
+
+	public class OctInformation {
+		public String palla_payment_method_id;
+	}
+    
+	public class TotalAmountReimbursed {
+		public double value;
+		public String currencyValue;
+	}
+    
+	public virtual class ReimbusermentRequest {
+		public BeneficiaryAccount beneficiary_account;
+		public IntermediaryAccount intermediary_account;
+		public TotalAmountReimbursed total_amount_reimbursed;
+	} 
+	
+	public class ReimbusermentDetail extends ReimbusermentRequest {
+		public String reimbursement_id;
+	}
+
+	public class ReimbusermentResponse {
+		public String reimbursement_id;
+		public String beneficiary_holder_full_name;
+		public String intermediary_bank_name;
+		public Amount total_amount_reimbursed;
+	}
+
+	public class Amount {
+		public Decimal value;
+		public String currencyValue;
+	}
+    
+	public class EncryptedData {
+		public String encrypted_data;
+	}
+}
+
+Em alguns registro na hora da criação os campos de Wire Code Value e Wire Code Type não estão sendo preenchidos no cenário de PERU para o CCI
