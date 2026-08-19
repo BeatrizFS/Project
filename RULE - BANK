@@ -1,0 +1,18 @@
+Decision Context
+banks/{bank_id}	GET	Return an issuer bank.
+banks/{bank_id}/agents/{agent_id}	GET	Return the connected agent.
+
+BenefitsConfigAPIBanks_VEXP	/sales/enterprise/transversal/benefits_configuration/vexp/banks/*	GET bank, GET agent
+
+GET /banks/{bank_id}/agents/{agent_id}
+
+/banks/{bank_id} returns Bank from Account: bank_name from Name, country from BillingCountryCode, base_currency from CurrencyIsoCode. The path bank_id must equal context.bankAccountId.
+
+/banks/{bank_id}/agents/{agent_id} returns Agent from Contact. The contract calls it "the connected agent", and the authorization context already resolved exactly that record in decision 2, so the operation performs one query for the name and email fields and reuses the resolved context for the authorization check. Both path values must match the context.
+
+Operation
+GET bank / agent
+SOQL	
+2
+DML	
+0
