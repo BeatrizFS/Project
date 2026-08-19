@@ -1,0 +1,194 @@
+8. POST /benefit_packages — create
+Response 201 with {"benefit_package_id": "<18-char Id>"}, encrypted.
+
+Flow, after authorization and body validation:
+
+Resolve the catalogue: Product__c by Key__c, then the Benefit__c records by Visa_External_Reference__c IN :benefitIds for every benefit_id in core_benefits and optional_benefits, then the active PricebookEntry for each benefit in the bank's CurrencyIsoCode. Three queries, all bulk, all outside any loop. A benefit_id that resolves to nothing yields 400 bad_request naming the attribute; a benefit with no active price entry yields 400 bad_request stating that the benefit is not available for the bank's currency.
+Resolve the BIN: the referenced VG_BankIdentificationNumber__c must exist, carry Status__c = 'Approved' and have Bank__c equal to the caller's bank. The BIN is mandatory on the package, so a missing, unapproved or foreign BIN yields 400 bad_request; the Without BIN state the prototype drew is not supported.
+Coerce active_start_at to today when it is in the past, per the contract note.
+Build the ServiceContract in Draft, with AccountId and ContactId from the agent context and Pricebook2Id set to the benefits price book.
+Insert the header, then insert the lines — one ContractLineItem per benefit, Quantity set to amount_of_policies, Benefit_Category__c set from which collection the benefit came from.
+Two DML statements in one transaction. There is a single point of persistence and atomicity comes from the Apex transaction itself: an exception on the line insert rolls the header back with no savepoint. A savepoint would add a governor-limited resource for no behavioural gain.
+
+- Pode desconsiderar a parte do VG_BankIdentificationNumber__c
+
+Operation	SOQL	DML	JWE operations
+POST create	4 (agent, product, benefits, price entries)	2	1 decrypt + 1 encrypt
+
+Rules that keep those counts stable: no SOQL and no DML inside a loop; one token parse per request; every query bounded by LIMIT and selective on an indexed field; the catalogue resolved in bulk by Set<Id> rather than per benefit. The most expensive read is the package detail with its 100-plus lines, and the most expensive write is a full PATCH replacement of 200 lines. Both are inside platform limits with substantial margin, but neither is inside 250 ms with certainty — which is why the SLA is recorded as R1 rather than asserted as met.
+
+Message-level encryption is the single largest non-query cost, and it is not negotiable (decision 6). Load testing against the real key configuration, before the contract is published, is a next step.
+
+- Pode desconsidera a parte de encript e decript por agora
+
+### 2. `ServiceContract` (record type `Benefit Package`) is the package header
+
+A dedicated record type isolates benefit packages from any other service contract usage in
+the org, and gives the page layout, the picklist value sets and the validation rules a scoping
+key.
+
+| Contract / flow attribute | Salesforce field | Type | Notes |
+|---|---|---|---|
+| `benefit_package_id` | `Id` | Id (18) | Read-only, platform-generated. See decision 6. |
+| Package name (flow only) | `Name` | Text(255) | Standard. Flow example: `Gold 400102`. |
+| Activation number (flow only) | `ContractNumber` | Auto Number | Standard, read-only. Displayed on the activation confirmation screen. |
+| `status` | Package Status (`Package_Status__c`) | Picklist | `Draft`, `Awaiting Start`, `Active`, `Cancelled`, `Expired`. Source of truth for the API. See decision 5. |
+| — | `Status` | Picklist | Standard, **read-only and platform-derived** (`Inactive`, `Active`, `Expired`). Neither written nor read by this solution. `ServiceContract` has no `StatusCode` field. |
+| `product_reference` | Product Reference (`Product_Reference__c`) | Text(10) | Contract value, e.g. `I_C_BR`. Indexed as External Id for catalogue lookup. |
+| `product_reference` (resolved) | Product (`Product__c`) | Lookup(`Product__c`) | Link to the existing content catalogue. Populated by Apex from `Product_Reference__c`. |
+| `active_start_at` | `StartDate` | Date | Standard. |
+| `active_end_at` | `EndDate` | Date | Standard. |
+| — | `Term` | Number(4,0) | Standard. Whole months between `StartDate` and `EndDate`, set by Apex on write. |
+| `amount_of_policies` | Amount of Policies (`Amount_of_Policies__c`) | Number(9,0) | Agent-declared, minimum 1. Drives `ContractLineItem.Quantity`. |
+| `affected_policy_range.external_number_start_at` | Policy Range Start (`Policy_Range_Start__c`) | Text(10) | |
+| `affected_policy_range.external_number_end_at` | Policy Range End (`Policy_Range_End__c`) | Text(10) | |
+| Portfolio (flow only) | Portfolio (`Portfolio__c`) | Picklist | `Consumer`, `Business`, `Commercial`. |
+| Account funding source (flow only) | Account Funding Source (`Account_Funding_Source__c`) | Picklist | `Credit`, `Debit`, `Prepaid`. |
+| BIN (flow only) | Bank Identification Number (`Bank_Identification_Number__c`) | Lookup(`VG_BankIdentificationNumber__c`) | **Required.** The backend requires the BIN to exist; the *Without BIN* variant of the prototype is out of scope. See decision 12. |
+| Renewal (flow only) | Renewal Type (`Renewal_Type__c`) | Picklist | `Automatic`, `Manual`. Default `Automatic`. |
+| Billing (flow only) | Billing Frequency (`Billing_Frequency__c`) | Picklist | `Quarterly`. Single value in the MVP, modelled as a picklist so the value set can grow without a schema change. |
+| Quarter start date (flow only) | Billing Quarter (`Billing_Quarter__c`) | Picklist | `Q1`, `Q2`, `Q3`, `Q4`. |
+| Estimated total cost (flow only) | `TotalPrice` | Currency | Standard roll-up of the lines. See decision 9. |
+| Total cost per benefit (flow only) | Cost per Account (`Cost_per_Account__c`) | Formula(Currency) | `TotalPrice / Amount_of_Policies__c`, guarded against division by zero. |
+| Issuer bank | `AccountId` | Lookup(`Account`) | Record type `Issuer Bank`. Row-level scoping key of every query. |
+| Acting agent | `ContactId` | Lookup(`Contact`) | Resolved from the token claims at creation time. |
+| Agreement acceptance | Agreement envelope field set | — | Acceptance is a **signature**, not a checkbox. The instant, the signer and the template version live in `Agreement_Signed_At__c`, the envelope recipients and `Agreement_Template_Version__c`, defined in decision 13 of `20260725-AXA-ADR-VOBP-architecture-of-agreement-signature-backend.md`. `Terms_Accepted_At__c`, `Terms_Accepted_By__c` and `Terms_Version__c` are superseded and not created. |
+| Signature gate | Activation Hold Reason (`Activation_Hold_Reason__c`) | Text(255) | Why a package that reached its start date did not activate — normally an unsigned agreement. Written by the promotion batch, decision 11. |
+| — | Completed At (`Completed_At__c`) | DateTime | Set by the `/complete` operation. |
+| — | Cancelled At (`Cancelled_At__c`) | DateTime | Set by the `/cancel` operation. |
+| — | Cancelled By (`Cancelled_By__c`) | Lookup(`Contact`) | |
+| — | Client Id (`Client_Id__c`) | Text(80) | `aud` of the access token that created the record, matching the `client_id__c` convention already used on `Account`. |
+
+`Pricebook2Id` is populated with the benefits price book (decision 4), which is what allows
+`ContractLineItem` rows to be inserted.
+
+### 3. `ContractLineItem` is the benefit line, one row per benefit
+
+Both `core_benefits` and `optional_benefits` of the contract map to the same object, separated
+by a category field. A single line object keeps the roll-up arithmetic native and removes the
+need to union two collections when serialising the response.
+
+| Contract / flow attribute | Salesforce field | Type | Notes |
+|---|---|---|---|
+| `benefit_id` | Benefit (`Benefit__c`) | Lookup(`Benefit__c`) | Semantic link to the existing catalogue. The exposed `benefit_id` is `Benefit__r.Visa_External_Reference__c`, not the record Id. See decision 6. |
+| `name` | `Benefit__r.Name` | — | Read from the catalogue, never copied. Single source of truth for the benefit name. Localised variants exist as `Benefit_Name_EN__c`, `Benefit_Name_es__c` and `Benefit_Name_pt_BR__c`. |
+| `description` | `Benefit__r.Benefit_Description__c` | — | Read from the catalogue. Optional benefits only, per the contract. |
+| core vs optional | Benefit Category (`Benefit_Category__c`) | Picklist | `Core`, `Optional`. Required. |
+| — | `PricebookEntryId` | Lookup | Standard, mandatory. Resolves the price and currency. |
+| — | `Product2Id` | Lookup | Standard, derived from `PricebookEntryId`. |
+| — | `Quantity` | Number | Standard, mandatory. Set to `ServiceContract.Amount_of_Policies__c` — pricing in the flow is per card. |
+| Optional benefit price | `UnitPrice` | Currency | Standard, mandatory. Per-card price from the price book entry. `0` for core benefits, which are included by definition. |
+| — | `TotalPrice` | Currency | Standard, `Quantity × UnitPrice`. |
+| `coverage_type` (products contract) | Coverage Type (`Coverage_Type__c`) | Picklist | `SIMPLE`, `USAGE`, `PERIOD`. |
+| `incident_max` (products contract) | Incident Maximum (`Incident_Max__c`) | Number(9,0) | `USAGE` coverage only. |
+| `annual_max` (products contract) | Annual Maximum (`Annual_Max__c`) | Number(9,0) | `USAGE` coverage only. |
+| `period` (products contract) | Coverage Period (`Coverage_Period__c`) | Text(4) | `PERIOD` coverage only, ISO 8601 duration, e.g. `P6M`. |
+| — | `StartDate` / `EndDate` | Date | Standard. Mirror the package dates; reserved for future per-benefit effective periods. |
+
+Core benefits are persisted as lines rather than derived on read. The catalogue can change
+after the package is created, and the package must keep the composition that the agent accepted
+in the agreement — a derived list would silently rewrite history.
+
+### 4. Catalogue bridge: one `Product2` per `Benefit__c`, in a dedicated product family
+
+`Product2` is **already in production in this org** as the card-product catalogue. It is queried by
+`WebportalSalesProducts_V1` and `WebportalSalesProductDetails_V1` with `Key__c`,
+`Card_Platform_Code__c`, `Card_Product_Id__c`, `Card_Product_Name__c`, `Card_Type_Code__c`,
+`Card_Subtype_Code__c`, `Country_Code__c` and `Order__c`, and it carries the child relationship
+`MN_Product_Countries__r`. The bridge therefore does not populate an empty object — it **adds a
+second population** to a live one, and the two must not be confusable.
+
+`ContractLineItem.PricebookEntryId` is mandatory, so a commercial representation of each benefit is
+unavoidable. Rather than migrating the benefit catalogue, a thin bridge is built:
+
+- One `Product2` per `Benefit__c`, related by **Benefit (`Benefit__c`)**, a lookup on `Product2`, and
+  keyed by **Benefit External Id (`Benefit_External_Id__c`)**, a unique External Id text field
+  carrying the `Benefit__c` record Id. The External Id makes the sync idempotent through `upsert`.
+- **`Family = 'Benefit'`** on every row the bridge creates. This is what separates benefit products
+  from the existing card products, which the Sales APIs select by `Key__c`. Every query in this
+  solution filters on the family, and every query of the existing APIs remains untouched because
+  benefit rows carry no `Key__c`.
+- `Product2.Name` and `Product2.Description` are copied from the catalogue at sync time; the API
+  always serialises from `Benefit__c`, so a stale copy on `Product2` cannot leak into a response.
+- A **Visa Benefits** custom `Pricebook2` holds the per-card prices. A `PricebookEntry` in a custom
+  price book requires an active entry for the same product in the **Standard Price Book** first; the
+  sync creates both, the standard entry at the same `UnitPrice`.
+- One `PricebookEntry` per product per activated currency (decision 7).
+- The sync runs from the record-triggered Flow **`Benefit_Sync_Product2`** on `Benefit__c` for
+  incremental changes, and from `Benefit2ProductSyncBatch` for backfill and reconciliation. The Flow
+  is the incremental path because `Benefit__c` carries no Apex trigger and no record-triggered flow
+  today; had one existed, the sync would extend it instead of adding a second automation to the same
+  object and moment. Both paths converge on the same upsert semantics keyed by
+  `Benefit_External_Id__c`, so a record repaired by the batch is indistinguishable from one created
+  by the Flow.
+
+The bridge is deliberately one-directional: `Benefit__c` is the source, `Product2` is the
+projection. Nothing writes back to the catalogue, and nothing in the bridge touches a card-product
+row.
+
+### 5. Package Status (`Package_Status__c`) is the status field; the standard `Status` cannot be used
+
+The contract defines five states — `DRAFT`, `AWAITING_START`, `ACTIVE`, `CANCELLED`, `EXPIRED`.
+
+The standard field cannot carry them, and the reason is structural rather than a matter of
+configuration. A describe of `ServiceContract` in the target org returns:
+
+- **`Status` is read-only** — `createable: false`, `updateable: false`. The platform derives it from
+  `StartDate`, `EndDate` and `ActivationDate`, and its active values are exactly `Inactive`,
+  `Active`, `Expired`. No API call and no automation can write it, and no value can be added to it.
+- **`ServiceContract` has no `StatusCode` field.** The status-category mechanism that makes `Status`
+  extensible on `Contract` and `Order` does not exist on this object — none of its 51 fields is a
+  status category.
+- The only writable status-like standard picklist is `ApprovalStatus` (`Draft`,
+  `In Approval Process`, `Activated`, unrestricted and therefore extensible). It models an
+  **approval**, not a lifecycle, and would be contended by any approval process later configured on
+  the object.
+
+Decision: **Package Status (`Package_Status__c`)**, a custom picklist, is the only field the API and
+the promotion batch read and write:
+
+| API `status` | `Package_Status__c` |
+|---|---|
+| `DRAFT` | `Draft` |
+| `AWAITING_START` | `Awaiting Start` |
+| `ACTIVE` | `Active` |
+| `CANCELLED` | `Cancelled` |
+| `EXPIRED` | `Expired` |
+
+Translation between the API's `SCREAMING_SNAKE` enum and the picklist labels lives in a single
+private map on the API base class. No Apex compares a status literal in more than one place.
+
+Nothing synchronises the standard `Status`, because nothing can write it — there is no drift to
+manage. It keeps being derived from the date window and stays coherent on its own terms: a package
+whose window is open reads `Active` there too, one whose `EndDate` has passed reads `Expired`. The
+two fields agree by construction on three of the five states, and the standard field is simply
+silent on `Draft`, `Awaiting Start` and `Cancelled`.
+
+Residual cost: a standard report grouped by `Status` cannot separate a draft from a cancelled
+package, so reporting for this capability groups by `Package_Status__c`. FLS keeps the custom field
+writable only for the integration identity and the batch, which is what stops a manual edit from
+inventing a state the transition graph forbids.
+
+The transition graph is closed and enforced in Apex, not by validation rule, because the
+transitions are triggered by API operations and by a scheduled job, both of which need to
+return a precise error rather than a validation-rule message:
+
+The transition graph is closed and enforced in Apex, not by validation rule, because the
+transitions are triggered by API operations and by a scheduled job, both of which need to
+return a precise error rather than a validation-rule message:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Draft: POST /benefit_packages
+    Draft --> Draft: PATCH
+    Draft --> Awaiting_Start: POST /complete
+    Draft --> Cancelled: POST /cancel
+    Awaiting_Start --> Active: batch, StartDate reached
+    Awaiting_Start --> Cancelled: POST /cancel
+    Active --> Expired: batch, EndDate passed
+    Active --> Cancelled: POST /cancel
+    Cancelled --> [*]
+    Expired --> [*]
+```
+
+`Cancelled` and `Expired` are terminal. No transition leaves them, including through PATCH.
