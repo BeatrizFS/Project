@@ -1,0 +1,114 @@
+private static void handleCancel(String benefitPackageId) {
+
+    try {
+        WebportalAPITokenAuthentication_v1.parseAndValidateSecurityToken(
+            RestContext.request,
+            new Set<String>{
+                'urn:axa.partners.sales.enterprise.transversal.benefits_configuration.benefit_packages.write',
+                'urn:axa.partners.benefits_platform.write'
+            }
+        );
+
+        List<ServiceContract> packages = [
+            SELECT Id,
+                Package_Status__c
+            FROM ServiceContract
+            WHERE Id = :benefitPackageId
+            AND RecordType.DeveloperName = :BENEFIT_PACKAGE_RECORD_TYPE
+            LIMIT 1
+        ];
+
+        if (packages.isEmpty()) {
+            throw new WebportalApiUtility_v1.RequestAPIException(
+                404,
+                'Not Found',
+                'The searched resource was not found.'
+            );
+        }
+
+        ServiceContract contract = packages[0];
+
+        Set<String> cancellableStatuses = new Set<String>{
+            'Draft',
+            'Awaiting Start',
+            'Active'
+        };
+
+        if (!cancellableStatuses.contains(contract.Package_Status__c)) {
+            throw new WebportalApiUtility_v1.RequestAPIException(
+                400,
+                'bad_request',
+                'Benefit package cannot be cancelled because its current status is '
+                + contract.Package_Status__c
+                + '.'
+            );
+        }
+
+        contract.Package_Status__c = 'Cancelled';
+        contract.Cancelled_At__c = System.now();
+
+        update contract;
+
+        RestContext.response.statusCode = 204;
+
+    } catch (WebportalApiUtility_v1.RequestAPIException ex) {
+
+        RestContext.response.statusCode = ex.status_code;
+        RestContext.response.responseBody = Blob.valueOf(
+            JSON.serializePretty(
+                new WebportalApiUtility_v1.ErrorMessage(
+                    String.valueOf(ex.status_code),
+                    ex.error,
+                    ex.error_description
+                )
+            )
+        );
+
+    } catch (DMLException ex) {
+
+        System.debug(
+            LoggingLevel.ERROR,
+            'DMLException: ' + ex.getMessage()
+        );
+
+        System.debug(
+            LoggingLevel.ERROR,
+            'DMLException stack trace: ' + ex.getStackTraceString()
+        );
+
+        RestContext.response.statusCode = 500;
+        RestContext.response.responseBody = Blob.valueOf(
+            JSON.serializePretty(
+                new WebportalApiUtility_v1.ErrorMessage(
+                    '500',
+                    'database_internal_server_error',
+                    'Error when try to cancel benefit package.'
+                )
+            )
+        );
+
+    } catch (Exception ex) {
+
+        System.debug(
+            LoggingLevel.ERROR,
+            'Exception type: ' + ex.getTypeName()
+        );
+
+        System.debug(
+            LoggingLevel.ERROR,
+            'Exception stack tracing: ' + ex.getStackTraceString()
+        );
+
+        RestContext.response.statusCode = 500;
+        RestContext.response.responseBody = Blob.valueOf(
+            JSON.serializePretty(
+                new WebportalApiUtility_v1.ErrorMessage(
+                    '500',
+                    'Internal Server Error',
+                    'Unexpected error cancelling the benefit package: '
+                    + ex.getMessage()
+                )
+            )
+        );
+    }
+}
