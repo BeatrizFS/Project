@@ -1,0 +1,67 @@
+    /*private static void populateLegalConsents(ServiceContract contract, BenefitPackage request) {
+        if (request.legal_consents != null && !request.legal_consents.isEmpty()) {
+            LegalConsentItem consent = request.legal_consents[0];
+
+            contract = (ServiceContract) WebportalApiUtility_v1.setSObjectField(contract, 'Legal_Consent_Code__c', consent.code, false);
+            contract = (ServiceContract) WebportalApiUtility_v1.setSObjectField(contract, 'Legal_Consent_Confirmed__c', consent.is_confirmed != null ? consent.is_confirmed : false);
+
+            String consentedAt = consent.consented_at;
+            if (consentedAt != null && consentedAt.contains('T') && consentedAt.contains('Z')) {
+                consentedAt = consentedAt.replace('T', ' ');
+                consentedAt = consentedAt.replace('Z', '');
+            }
+
+            contract = (ServiceContract) WebportalApiUtility_v1.setSObjectField(
+                contract,
+                'Legal_Consent_Date__c',
+                consentedAt != null ? Datetime.valueOfGmt(consentedAt) : null,
+                false
+            );
+        }
+    }*/
+===================================================================================================================  
+
+   /*private static Map<String, PricebookEntry> getPricebookEntriesByBenefitReference(Map<String, Benefit__c> benefitsByReference, Id pricebookId, String currencyIsoCode) {
+        Set<Id> benefitIds = new Set<Id>();
+        for (Benefit__c benefit : benefitsByReference.values()) {
+            benefitIds.add(benefit.Id);
+        }
+
+        List<Product2> products = [SELECT Id, Benefit__c FROM Product2 WHERE Benefit__c IN :benefitIds AND Family = 'Benefit' AND IsActive = true];
+
+        Map<Id, Product2> productsByBenefitId = new Map<Id, Product2>();
+        Set<Id> productIds = new Set<Id>();
+        for (Product2 product : products) {
+            if (productsByBenefitId.containsKey(product.Benefit__c)) {
+                throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'More than one active Product2 was found for Benefit ' + String.valueOf(product.Benefit__c));
+            }
+
+            productsByBenefitId.put(product.Benefit__c, product);
+            productIds.add(product.Id);
+        }
+
+        Map<Id, PricebookEntry> entriesByProductId = new Map<Id, PricebookEntry>();
+        for (PricebookEntry entry : [SELECT Id, Product2Id, UnitPrice FROM PricebookEntry WHERE Pricebook2Id = :pricebookId AND Product2Id IN :productIds AND CurrencyIsoCode = :currencyIsoCode AND IsActive = true]) {
+            entriesByProductId.put(entry.Product2Id, entry);
+        }
+
+        Map<String, PricebookEntry> result = new Map<String, PricebookEntry>();
+        for (String reference : benefitsByReference.keySet()) {
+            Benefit__c benefit = benefitsByReference.get(reference);
+            Product2 product = productsByBenefitId.get(benefit.Id);
+
+            if (product == null) {
+                throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Product2 for benefit ' + benefit.Visa_External_Reference__c + ' was not found in the catalogue.');
+            }
+
+            PricebookEntry entry = entriesByProductId.get(product.Id);
+
+            if (entry == null) {
+                throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Benefit ' + reference + ' is not available in the Benefits Pricebook.');
+            }
+
+            result.put(reference, entry);
+        }
+
+        return result;
+    }*/
