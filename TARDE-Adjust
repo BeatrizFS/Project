@@ -37,3 +37,130 @@ private static void validateBenefitReplacementRequest(
         );
     }
 }
+
+=====================================
+    private static void validateBenefits(Integer benefitCount, String fieldName, Boolean required) {
+        if (required && (benefitCount == null || benefitCount == 0)) {
+            throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', fieldName + ' must contain at least one benefit.');
+        }
+
+        if (benefitCount != null && benefitCount > MAX_BENEFITS) {
+            throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', fieldName + ' cannot contain more than ' + MAX_BENEFITS + ' benefits.'
+            );
+        }
+    }
+
+PATCH
+    private static void handlePatch(String benefitPackageId) {
+        try {
+            WebportalAPITokenAuthentication_v1.parseAndValidateSecurityToken(
+                RestContext.request,
+                new Set<String>{
+                    'urn:axa.partners.sales.enterprise.transversal.benefits_configuration.benefit_packages.write',
+                    'urn:axa.partners.benefits_platform.write'
+                }
+            );
+
+            String requestBody = RestContext.request.requestBody == null ? null : RestContext.request.requestBody.toString().trim();
+
+            if (String.isBlank(requestBody)) {
+                throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Request body cannot be empty.');
+            }
+
+            requestBody = WebportalApiUtility_v1.removeXMLInjections(requestBody);
+            requestBody = WebportalApiUtility_v1.removeHtmlInjection(requestBody);
+
+            
+            Map<String, Object> body = (Map<String, Object>) JSON.deserializeUntyped(requestBody);
+            BenefitPackage request = (BenefitPackage) JSON.deserializeStrict(requestBody, BenefitPackage.class);
+
+            ServiceContract contract = getBenefitPackage(benefitPackageId);
+
+            validateDraftStatus(contract, 'updated');
+
+            applyBenefitPackagePatch(contract, request, body);
+    private static void applyBenefitPackagePatch(ServiceContract contract, BenefitPackage request, Map<String, Object> body) {
+        //Quantity of policies, start and end dates, product reference, affected policy range, core benefits, and optional benefits can be updated.
+
+        if (body.containsKey('product_reference')) {
+            Product__c product = getProduct(request.product_reference);
+            contract.Product_Reference__c = request.product_reference;
+            contract.Product__c = product.Id;
+        }
+
+        if (body.containsKey('active_start_at')) {
+            contract.StartDate = normalizeStartDate(request.active_start_at);
+        }
+
+        if (body.containsKey('active_end_at')) {
+            contract.EndDate = request.active_end_at;
+        }
+
+        if (body.containsKey('active_start_at') || body.containsKey('active_end_at')) {
+            validateDates(contract.StartDate, contract.EndDate);
+            contract.Term = calculateWholeMonthTerm(contract.StartDate, contract.EndDate);
+        }
+
+        if (body.containsKey('amount_of_policies')) {
+            validateAmountOfPolicies(request.amount_of_policies);
+            contract.Amount_of_Policies__c = request.amount_of_policies;           
+        }
+
+        if (body.containsKey('affected_policy_range')) {
+            applyPolicyRangePatch(contract, request);
+        }
+    
+        if (body.containsKey('core_benefits') ||
+            body.containsKey('optional_benefits')) {
+            replaceBenefitLines(contract, request, body);
+        }
+    }
+    private static void replaceBenefitLines(ServiceContract contract, BenefitPackage request, Map<String, Object> body) {
+        Boolean replaceCore = body.containsKey('core_benefits');
+        Boolean replaceOptional = body.containsKey('optional_benefits');
+
+        validateBenefits(request, replaceCore, replaceOptional);
+
+        Map<String, Benefit__c> benefitsByReference = getBenefitsByExternalReference(request, replaceCore, replaceOptional);
+
+        //Waiting - Get in token base_currency
+        String currencyIsoCode = 'USD';
+
+        Map<String, PricebookEntry> pricebookEntriesByBenefit = getPricebookEntriesByBenefitReference(benefitsByReference, currencyIsoCode);
+
+CREATE
+    private static void handleCreate() {
+
+        try {
+            WebportalAPITokenAuthentication_v1.parseAndValidateSecurityToken(
+                RestContext.request,
+                new Set<String>{
+                    'urn:axa.partners.sales.enterprise.transversal.benefits_configuration.benefit_packages.write',
+                    'urn:axa.partners.benefits_platform.write'
+                }
+            );
+
+            String requestBody = RestContext.request.requestBody == null ? null : RestContext.request.requestBody.toString().trim();
+
+            if (String.isBlank(requestBody)) {
+                throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Request body cannot be empty.');
+            }
+
+            requestBody = WebportalApiUtility_v1.removeXMLInjections(requestBody);
+            requestBody = WebportalApiUtility_v1.removeHtmlInjection(requestBody);
+
+            BenefitPackage request = (BenefitPackage) JSON.deserializeStrict(requestBody, BenefitPackage.class);
+
+            WebportalApiUtility_v1.runValidateRequiredFields(requestBody, CREATE_REQUIRED_FIELDS);
+
+            Date startDate = normalizeStartDate(request.active_start_at);
+            Date endDate = request.active_end_at;
+
+            validateCreateRequest(request, startDate, endDate);
+    private static void validateCreateRequest(BenefitPackage request, Date startDate, Date endDate) {
+        validateDates(startDate, endDate);
+        validateAmountOfPolicies(request.amount_of_policies);
+        validateBenefits(request.core_benefits, true);
+    }
+
+
