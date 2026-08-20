@@ -1,1 +1,207 @@
-buildPatchContractLineItems e buildContractLineItems parecem a mesma coisa, sera que não dar para otimizar esses dois metodos em apenas 1?
+private static List<ContractLineItem> buildContractLineItems(
+    Id contractId,
+    BenefitPackage request,
+    Date startDate,
+    Date endDate,
+    Map<String, Benefit__c> benefitsByReference,
+    Map<String, PricebookEntry> pricebookEntriesByBenefit,
+    Set<String> categories,
+    Integer quantity
+) {
+    List<ContractLineItem> lineItems = new List<ContractLineItem>();
+
+    if (categories.contains(CATEGORY_CORE) &&
+        request.core_benefits != null) {
+
+        for (CoreBenefit coreBenefit : request.core_benefits) {
+            lineItems.add(
+                buildContractLineItem(
+                    contractId,
+                    quantity,
+                    startDate,
+                    endDate,
+                    benefitsByReference.get(coreBenefit.benefit_id),
+                    pricebookEntriesByBenefit.get(coreBenefit.benefit_id),
+                    CATEGORY_CORE,
+                    0
+                )
+            );
+        }
+    }
+
+    if (categories.contains(CATEGORY_OPTIONAL) &&
+        request.optional_benefits != null) {
+
+        for (OptionalBenefit optionalBenefit : request.optional_benefits) {
+            PricebookEntry pricebookEntry =
+                pricebookEntriesByBenefit.get(optionalBenefit.benefit_id);
+
+            lineItems.add(
+                buildContractLineItem(
+                    contractId,
+                    quantity,
+                    startDate,
+                    endDate,
+                    benefitsByReference.get(optionalBenefit.benefit_id),
+                    pricebookEntry,
+                    CATEGORY_OPTIONAL,
+                    pricebookEntry == null
+                        ? null
+                        : pricebookEntry.UnitPrice
+                )
+            );
+        }
+    }
+
+    return lineItems;
+}
+
+private static ContractLineItem buildContractLineItem(
+    Id contractId,
+    Integer quantity,
+    Date startDate,
+    Date endDate,
+    Benefit__c benefit,
+    PricebookEntry pricebookEntry,
+    String category,
+    Decimal unitPrice
+) {
+    if (benefit == null) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            'Benefit could not be resolved.'
+        );
+    }
+
+    if (pricebookEntry == null) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            'No PricebookEntry was found for benefit ' +
+            benefit.Name +
+            ' in the Visa Benefits Pricebook.'
+        );
+    }
+
+    return new ContractLineItem(
+        ServiceContractId = contractId,
+        PricebookEntryId = pricebookEntry.Id,
+        Benefit_Category__c = category,
+        Quantity = quantity,
+        UnitPrice = unitPrice,
+        StartDate = startDate,
+        EndDate = endDate
+    );
+}
+-------------------------
+Set<String> categories = new Set<String>{
+    CATEGORY_CORE,
+    CATEGORY_OPTIONAL
+};
+
+List<ContractLineItem> lineItems = buildContractLineItems(
+    contract.Id,
+    request,
+    startDate,
+    endDate,
+    benefitsByReference,
+    pricebookEntriesByBenefit,
+    categories,
+    request.amount_of_policies
+);
+
+---------------------
+Set<String> categories = new Set<String>();
+
+if (replaceCore) {
+    categories.add(CATEGORY_CORE);
+}
+
+if (replaceOptional) {
+    categories.add(CATEGORY_OPTIONAL);
+}
+
+Integer quantity =
+    contract.Amount_of_Policies__c == null
+        ? 0
+        : Integer.valueOf(contract.Amount_of_Policies__c);
+
+List<ContractLineItem> newLineItems =
+    buildContractLineItems(
+        contract.Id,
+        request,
+        contract.StartDate,
+        contract.EndDate,
+        benefitsByReference,
+        pricebookEntriesByBenefit,
+        categories,
+        quantity
+    );
+
+---------------------------
+private static void replaceBenefitLines(
+    ServiceContract contract,
+    BenefitPackage request,
+    Map<String, Object> body
+) {
+    Boolean replaceCore = body.containsKey('core_benefits');
+    Boolean replaceOptional = body.containsKey('optional_benefits');
+
+    validateBenefitReplacementRequest(
+        request,
+        replaceCore,
+        replaceOptional
+    );
+
+    Map<String, Benefit__c> benefitsByReference =
+        getBenefitsByExternalReference(
+            request,
+            replaceCore,
+            replaceOptional
+        );
+
+    Map<String, PricebookEntry> pricebookEntriesByBenefit =
+        getPricebookEntriesByBenefitReference(
+            benefitsByReference,
+            CURRENCY_ISO_CODE
+        );
+
+    deleteReplacedBenefitLines(
+        contract.ContractLineItems,
+        replaceCore,
+        replaceOptional
+    );
+
+    Set<String> categories = new Set<String>();
+
+    if (replaceCore) {
+        categories.add(CATEGORY_CORE);
+    }
+
+    if (replaceOptional) {
+        categories.add(CATEGORY_OPTIONAL);
+    }
+
+    Integer quantity =
+        contract.Amount_of_Policies__c == null
+            ? 0
+            : Integer.valueOf(contract.Amount_of_Policies__c);
+
+    List<ContractLineItem> newLineItems =
+        buildContractLineItems(
+            contract.Id,
+            request,
+            contract.StartDate,
+            contract.EndDate,
+            benefitsByReference,
+            pricebookEntriesByBenefit,
+            categories,
+            quantity
+        );
+
+    if (!newLineItems.isEmpty()) {
+        insert newLineItems;
+    }
+}
+
