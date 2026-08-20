@@ -1,0 +1,170 @@
+    private static void handlePatch(String benefitPackageId) {
+        try {
+            WebportalAPITokenAuthentication_v1.parseAndValidateSecurityToken(
+                RestContext.request,
+                new Set<String>{
+                    'urn:axa.partners.sales.enterprise.transversal.benefits_configuration.benefit_packages.write',
+                    'urn:axa.partners.benefits_platform.write'
+                }
+            );
+
+            String requestBody = RestContext.request.requestBody == null ? null : RestContext.request.requestBody.toString().trim();
+
+            if (String.isBlank(requestBody)) {
+                throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Request body cannot be empty.');
+            }
+
+            requestBody = WebportalApiUtility_v1.removeXMLInjections(requestBody);
+            requestBody = WebportalApiUtility_v1.removeHtmlInjection(requestBody);
+
+            
+            Map<String, Object> body = (Map<String, Object>) JSON.deserializeUntyped(requestBody);
+            BenefitPackage request = (BenefitPackage) JSON.deserializeStrict(requestBody, BenefitPackage.class);
+
+            ServiceContract contract = getBenefitPackage(benefitPackageId);
+
+            validateDraftStatus(contract, 'updated');
+            validatePatchRequest(request, body, contract);
+
+            stageBenefitPackagePatch(contract, request, body);
+
+            update contract;
+
+            RestContext.response.statusCode = 204;
+            RestContext.response.responseBody = null;
+
+        } catch(WebportalApiUtility_v1.RequestAPIException ex) {
+            RestContext.response.statusCode = ex.status_code;
+            RestContext.response.responseBody = Blob.valueOf(
+                JSON.serializePretty(
+                    new WebportalApiUtility_v1.ErrorMessage(
+                        String.valueOf(ex.status_code),
+                        ex.error, ex.error_description),
+                        true
+                    )
+                );
+        } catch (JSONException ex) {
+            RestContext.response.statusCode = 400;
+            RestContext.response.responseBody = Blob.valueOf(
+                JSON.serializePretty(
+                    new WebportalApiUtility_v1.ErrorMessage('400', 'Bad Request','The input information received were not compliant with the endpoint specification.')));
+		} catch(DMLException ex) {
+            System.debug(LoggingLevel.ERROR, 'DMLException: ' + ex.getMessage());
+            RestContext.response.statusCode = 500;
+            RestContext.response.responseBody = Blob.valueOf(
+                JSON.serializePretty(
+                    new WebportalApiUtility_v1.ErrorMessage('500', 'database_internal_server_error', 'Error when try to insert record in database.')
+                )
+            );
+        } catch(Exception ex) {
+            System.debug(LoggingLevel.INFO, 'Exception type: ' + ex.getTypeName());
+            System.debug(LoggingLevel.INFO, 'Exception stack tracing: ' + ex.getStackTraceString());
+            RestContext.response.statusCode = 500;
+            RestContext.response.responseBody = Blob.valueOf(
+                JSON.serializePretty(
+                    new WebportalApiUtility_v1.ErrorMessage('500', 'Internal Server Error', 'Unexpected error creating the request: ' + ex.getMessage())
+                )
+            );
+        }
+    }
+
+    private static void applyBenefitPackagePatch(ServiceContract contract, BenefitPackage request, Map<String, Object> body) {
+        if (body.containsKey('product_reference')) {
+            Product__c product = getProduct(request.product_reference);
+            contract.Product_Reference__c = request.product_reference;
+            contract.Product__c = product.Id;
+        }
+
+        if (body.containsKey('active_start_at')) {
+            contract.StartDate = normalizeStartDate(request.active_start_at);
+        }
+
+        if (body.containsKey('active_end_at')) {
+            contract.EndDate = request.active_end_at;
+        }
+
+        if (body.containsKey('active_start_at') || body.containsKey('active_end_at')) {
+            validateDates(contract.StartDate, contract.EndDate);
+            contract.Term = calculateWholeMonthTerm(contract.StartDate, contract.EndDate);
+        }
+
+        if (body.containsKey('amount_of_policies')) {
+            validateAmountOfPolicies(request.amount_of_policies);
+            contract.Amount_of_Policies__c = request.amount_of_policies;           
+        }
+
+        if (body.containsKey('affected_policy_range')) {
+            applyPolicyRangePatch(contract, request);
+        }
+    
+        if (body.containsKey('core_benefits') ||
+            body.containsKey('optional_benefits')) {
+            replaceBenefitLines(contract, request, body);
+        }
+    }
+
+    private static void applyPolicyRangePatch(ServiceContract contract, BenefitPackage request) {
+        WebportalApiUtility_v1.runValidateRequiredFields(JSON.serialize(request.affected_policy_range), POLICY_RANGE_REQUIRED_FIELDS);
+
+        contract.Policy_Range_Start__c = request.affected_policy_range.external_number_start_at;
+        contract.Policy_Range_End__c = request.affected_policy_range.external_number_end_at;
+    }  
+
+    private static void replaceBenefitLines(ServiceContract contract, BenefitPackage request, Map<String, Object> body) {
+        Boolean replaceCore = body.containsKey('core_benefits');
+        Boolean replaceOptional = body.containsKey('optional_benefits');
+
+        Map<String, Benefit__c> benefitsByReference = getBenefitsByExternalReference(request, replaceCore, replaceOptional);
+
+        //Waiting - Get in token base_currency
+        String currencyIsoCode = 'USD';
+
+        Map<String, PricebookEntry> pricebookEntriesByBenefit = getPricebookEntriesByBenefitReference(benefitsByReference, currencyIsoCode);
+
+        deleteReplacedBenefitLines(contract.ContractLineItems, replaceCore, replaceOptional);
+
+        Set<String> categories = new Set<String>();
+
+        if (replaceCore) {
+            categories.add(CATEGORY_CORE);
+        }
+
+        if (replaceOptional) {
+            categories.add(CATEGORY_OPTIONAL);
+        }
+
+        Integer quantity = contract.Amount_of_Policies__c == null ? 0 : Integer.valueOf(contract.Amount_of_Policies__c);
+
+        List<ContractLineItem> newLineItems =
+            buildContractLineItems(
+                contract.Id,
+                request,
+                contract.StartDate,
+                contract.EndDate,
+                benefitsByReference,
+                pricebookEntriesByBenefit,
+                categories,
+                quantity
+            );
+
+        if (!newLineItems.isEmpty()) {
+            insert newLineItems;
+        }
+    }
+
+    private static void deleteReplacedBenefitLines(List<ContractLineItem> existingLines, Boolean replaceCore, Boolean replaceOptional) {
+        List<ContractLineItem> linesToDelete = new List<ContractLineItem>();
+
+        for (ContractLineItem lineItem : existingLines) {
+            Boolean deleteLine = (replaceCore && lineItem.Benefit_Category__c == CATEGORY_CORE) || (replaceOptional && lineItem.Benefit_Category__c == CATEGORY_OPTIONAL);
+
+            if (deleteLine) {
+                linesToDelete.add(lineItem);
+            }
+        }
+        if (!linesToDelete.isEmpty()) {
+            delete linesToDelete;
+        }
+    }
+
+    
