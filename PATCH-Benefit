@@ -1,0 +1,141 @@
+PATCH
+/sales/enterprise/transversal/benefits_configuration/vexp/benefit_packages/{benefit_package_id}
+Updates a benefit package resource.
+
+Jump to definition
+Cf. summary
+
+Parameters
+Try it out
+Name	Description
+benefit_package_id *
+string
+(path)
+Identifier of the benefit package.
+
+b09aac28-7f63
+Request body
+
+application/json
+Example Value
+Schema
+{
+  "product_reference": "I_C_BR",
+  "active_start_at": "2028-05-22",
+  "active_end_at": "2029-05-22",
+  "amount_of_policies": 12500,
+  "affected_policy_range": {
+    "external_number_start_at": "1234569890",
+    "external_number_end_at": "1234569890"
+  },
+  "core_benefits": [
+    {
+      "benefit_id": "6fd155eb-c93e-4390-8671-8831f2b6ab57",
+      "name": "International Emergency Medical Services"
+    }
+  ],
+  "optional_benefits": [
+    {
+      "benefit_id": "6fd155eb-c93e-4390-8671-8831f2b6ab57",
+      "name": "International Emergency Medical Services"
+    }
+  ],
+  "legal_consents": [
+    {
+      "code": "legal_consent_I_understand",
+      "is_confirmed": true,
+      "consented_at": "2019-03-22T10:59:00Z"
+    }
+  ]
+}
+Responses
+Code	Description	Links
+204	
+Patch successfully done (No content returned).
+
+No links
+400	
+Bad Request.
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "status_code": "400",
+  "error": "Bad Request",
+  "error_description": "The input information received were not compliant with the endpoint specification."
+}
+No links
+401	
+Unauthorized. The identity of the caller has not been definitely confirmed (invalid issuer, expired token, ...)
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "status_code": "401",
+  "error": "Unauthorized",
+  "error_description": "Header \"authorization\" is not a valid JSON Web Token."
+}
+No links
+403	
+Forbidden. The identity of the caller is confirmed, however the required access grants are not met (missing scope, unknown client_id, ...)
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "status_code": "403",
+  "error": "Forbidden",
+  "error_description": "The right to access this endpoint has not been granted in the JSON Web Token."
+}
+No links
+404	
+Not found. The server did not find a current representation for the searched resource.
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "status_code": "404",
+  "error": "Not Found",
+  "error_description": "The searched resource was not found."
+}
+No links
+default	
+Default response format.
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "status_code": "500",
+  "error": "Internal Server Error"
+}
+No links
+Extensions
+
+PATCH is accepted only while the package is in DRAFT, and the benefit collections are replaced wholesale, never merged.
+11. PATCH /benefit_packages/{benefit_package_id} — update
+Response 204 with no body.
+
+Accepted only when Package_Status__c = 'Draft'. Any other status yields 400 bad_request with an error description naming the current status. 403 is not used here: the caller holds the right scope and the right bank, the resource state is what forbids the operation.
+Attributes present in the body are applied; absent attributes are left untouched.
+core_benefits and optional_benefits, when present, replace the corresponding lines entirely: the existing lines of that category are deleted and the submitted set is inserted. Merge semantics were discarded because the contract offers no removal operation, so a merge would make it impossible to deselect a benefit the agent had previously chosen — the New package flow lets an agent toggle optional benefits freely.
+Sending an empty array is a rejection, not a clearing: the contract declares minItems: 1 for both collections. Clearing every core benefit would produce a package that can never be completed.
+benefit_package_id and status in the body are ignored; both are readOnly.
+Delete plus insert of the lines runs in the same transaction as the header update. Where a package carries the contract maximum of 100 core and 100 optional benefits, a full replacement is 200 rows deleted and 200 inserted — well inside DML row limits, and the reason the operation stays synchronous.
+
+Operation	SOQL	DML	JWE operations
+PATCH	4	3 (update, delete lines, insert lines)	1 decrypt + 1 encrypt
