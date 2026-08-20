@@ -1,3 +1,42 @@
+private static ContractLineItem buildContractLineItem(
+    Id contractId,
+    Integer quantity,
+    Date startDate,
+    Date endDate,
+    Benefit__c benefit,
+    PricebookEntry pricebookEntry,
+    String category,
+    Decimal unitPrice
+) {
+    if (benefit == null) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            'Benefit could not be resolved.'
+        );
+    }
+
+    if (pricebookEntry == null) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            'No PricebookEntry was found for benefit ' +
+            benefit.Name +
+            ' in the Visa Benefits Pricebook.'
+        );
+    }
+
+    return new ContractLineItem(
+        ServiceContractId = contractId,
+        PricebookEntryId = pricebookEntry.Id,
+        Benefit_Category__c = category,
+        Quantity = quantity,
+        UnitPrice = unitPrice,
+        StartDate = startDate,
+        EndDate = endDate
+    );
+}
+------------------------------------------------------------------
 private static List<ContractLineItem> buildContractLineItems(
     Id contractId,
     BenefitPackage request,
