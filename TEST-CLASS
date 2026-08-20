@@ -1,0 +1,618 @@
+@isTest
+static void createBenefitPackageWithoutLegalConsents() {
+    Map<String, Object> body =
+        (Map<String, Object>) JSON.deserializeUntyped(requestBody);
+
+    body.remove('legal_consents');
+
+    RestRequest req = new RestRequest();
+    RestResponse res = new RestResponse();
+
+    req.requestURI = BASE_URI;
+    req.httpMethod = 'POST';
+    req.headers.put('authorization2', 'Bearer ' + token);
+    req.requestBody = Blob.valueOf(JSON.serialize(body));
+
+    RestContext.request = req;
+    RestContext.response = res;
+
+    Test.startTest();
+    BenefitsConfigAPIPackages_VEXP.doPost();
+    Test.stopTest();
+
+    System.assertEquals(201, RestContext.response.statusCode);
+
+    BenefitsConfigAPIPackages_VEXP.BenefitPackagePostResponse response =
+        (BenefitsConfigAPIPackages_VEXP.BenefitPackagePostResponse)
+        JSON.deserialize(
+            RestContext.response.responseBody.toString(),
+            BenefitsConfigAPIPackages_VEXP.BenefitPackagePostResponse.class
+        );
+
+    ServiceContract contract = [
+        SELECT Legal_Consent_Code__c,
+               Legal_Consent_Confirmed__c,
+               Legal_Consent_Date__c
+        FROM ServiceContract
+        WHERE Id = :response.benefit_package_id
+    ];
+
+    System.assertEquals(null, contract.Legal_Consent_Code__c);
+    System.assertEquals(null, contract.Legal_Consent_Confirmed__c);
+    System.assertEquals(null, contract.Legal_Consent_Date__c);
+}
+
+@isTest
+static void createBenefitPackageWithPolicyRangeMissingStart() {
+    Map<String, Object> body =
+        (Map<String, Object>) JSON.deserializeUntyped(requestBody);
+
+    body.put(
+        'affected_policy_range',
+        new Map<String, Object>{
+            'external_number_end_at' => '1100'
+        }
+    );
+
+    RestRequest req = new RestRequest();
+    RestResponse res = new RestResponse();
+
+    req.requestURI = BASE_URI;
+    req.httpMethod = 'POST';
+    req.headers.put('authorization2', 'Bearer ' + token);
+    req.requestBody = Blob.valueOf(JSON.serialize(body));
+
+    RestContext.request = req;
+    RestContext.response = res;
+
+    Test.startTest();
+    BenefitsConfigAPIPackages_VEXP.doPost();
+    Test.stopTest();
+
+    System.assertEquals(201, RestContext.response.statusCode);
+
+    BenefitsConfigAPIPackages_VEXP.BenefitPackagePostResponse response =
+        (BenefitsConfigAPIPackages_VEXP.BenefitPackagePostResponse)
+        JSON.deserialize(
+            RestContext.response.responseBody.toString(),
+            BenefitsConfigAPIPackages_VEXP.BenefitPackagePostResponse.class
+        );
+
+    ServiceContract contract = [
+        SELECT Policy_Range_Start__c,
+               Policy_Range_End__c
+        FROM ServiceContract
+        WHERE Id = :response.benefit_package_id
+    ];
+
+    System.assertEquals(null, contract.Policy_Range_Start__c);
+    System.assertEquals('1100', contract.Policy_Range_End__c);
+}
+
+@isTest
+static void createBenefitPackageWithPolicyRangeMissingEnd() {
+    Map<String, Object> body =
+        (Map<String, Object>) JSON.deserializeUntyped(requestBody);
+
+    body.put(
+        'affected_policy_range',
+        new Map<String, Object>{
+            'external_number_start_at' => '1000'
+        }
+    );
+
+    RestRequest req = new RestRequest();
+    RestResponse res = new RestResponse();
+
+    req.requestURI = BASE_URI;
+    req.httpMethod = 'POST';
+    req.headers.put('authorization2', 'Bearer ' + token);
+    req.requestBody = Blob.valueOf(JSON.serialize(body));
+
+    RestContext.request = req;
+    RestContext.response = res;
+
+    Test.startTest();
+    BenefitsConfigAPIPackages_VEXP.doPost();
+    Test.stopTest();
+
+    System.assertEquals(201, RestContext.response.statusCode);
+
+    BenefitsConfigAPIPackages_VEXP.BenefitPackagePostResponse response =
+        (BenefitsConfigAPIPackages_VEXP.BenefitPackagePostResponse)
+        JSON.deserialize(
+            RestContext.response.responseBody.toString(),
+            BenefitsConfigAPIPackages_VEXP.BenefitPackagePostResponse.class
+        );
+
+    ServiceContract contract = [
+        SELECT Policy_Range_Start__c,
+               Policy_Range_End__c
+        FROM ServiceContract
+        WHERE Id = :response.benefit_package_id
+    ];
+
+    System.assertEquals('1000', contract.Policy_Range_Start__c);
+    System.assertEquals(null, contract.Policy_Range_End__c);
+}
+
+@isTest
+static void updateBenefitPackageWithoutPolicyRange() {
+    ServiceContract contract = [
+        SELECT Id,
+               Policy_Range_Start__c,
+               Policy_Range_End__c
+        FROM ServiceContract
+        WHERE RecordType.DeveloperName = :BENEFIT_PACKAGE_RECORD_TYPE
+        LIMIT 1
+    ];
+
+    System.assertEquals('1000', contract.Policy_Range_Start__c);
+    System.assertEquals('1100', contract.Policy_Range_End__c);
+
+    Map<String, Object> body =
+        (Map<String, Object>) JSON.deserializeUntyped(requestBody);
+
+    body.remove('affected_policy_range');
+
+    RestRequest req = new RestRequest();
+    RestResponse res = new RestResponse();
+
+    req.requestURI = BASE_URI + '/' + contract.Id;
+    req.httpMethod = 'PATCH';
+    req.headers.put('authorization2', 'Bearer ' + token);
+    req.requestBody = Blob.valueOf(JSON.serialize(body));
+
+    RestContext.request = req;
+    RestContext.response = res;
+
+    Test.startTest();
+    BenefitsConfigAPIPackages_VEXP.doPatch();
+    Test.stopTest();
+
+    System.assertEquals(204, RestContext.response.statusCode);
+
+    ServiceContract updatedContract = [
+        SELECT Policy_Range_Start__c,
+               Policy_Range_End__c
+        FROM ServiceContract
+        WHERE Id = :contract.Id
+    ];
+
+    System.assertEquals('1000', updatedContract.Policy_Range_Start__c);
+    System.assertEquals('1100', updatedContract.Policy_Range_End__c);
+}
+
+@isTest
+static void updateBenefitPackage() {
+    ServiceContract contract = [
+        SELECT Id,
+               Package_Status__c,
+               Product_Reference__c,
+               StartDate,
+               EndDate,
+               Amount_of_Policies__c,
+               Policy_Range_Start__c,
+               Policy_Range_End__c
+        FROM ServiceContract
+        WHERE RecordType.DeveloperName = :BENEFIT_PACKAGE_RECORD_TYPE
+        LIMIT 1
+    ];
+
+    Map<String, Object> body = new Map<String, Object>{
+        'product_reference' => 'I_C_BR',
+        'active_start_at' => '2026-10-01',
+        'active_end_at' => '2027-10-01',
+        'amount_of_policies' => 200,
+        'affected_policy_range' => new Map<String, Object>{
+            'external_number_start_at' => '2000',
+            'external_number_end_at' => '2200'
+        },
+        'core_benefits' => new List<Object>{
+            new Map<String, Object>{
+                'benefit_id' => 'LACIEMS',
+                'name' => '(EMC) Emergency Medical Assistance'
+            }
+        },
+        'optional_benefits' => new List<Object>{
+            new Map<String, Object>{
+                'benefit_id' => 'LACCELPRO',
+                'name' => 'Cellphone Protection'
+            }
+        }
+    };
+
+    RestRequest req = new RestRequest();
+    RestResponse res = new RestResponse();
+
+    req.requestURI = BASE_URI + '/' + contract.Id;
+    req.httpMethod = 'PATCH';
+    req.headers.put('authorization2', 'Bearer ' + token);
+    req.requestBody = Blob.valueOf(JSON.serialize(body));
+
+    RestContext.request = req;
+    RestContext.response = res;
+
+    Test.startTest();
+    BenefitsConfigAPIPackages_VEXP.doPatch();
+    Test.stopTest();
+
+    System.assertEquals(204, RestContext.response.statusCode);
+    System.assertEquals(null, RestContext.response.responseBody);
+
+    ServiceContract updatedContract = [
+        SELECT Package_Status__c,
+               Product_Reference__c,
+               Product__c,
+               StartDate,
+               EndDate,
+               Term,
+               Amount_of_Policies__c,
+               Policy_Range_Start__c,
+               Policy_Range_End__c
+        FROM ServiceContract
+        WHERE Id = :contract.Id
+    ];
+
+    System.assertEquals('Draft', updatedContract.Package_Status__c);
+    System.assertEquals('I_C_BR', updatedContract.Product_Reference__c);
+    System.assertNotEquals(null, updatedContract.Product__c);
+    System.assertEquals(Date.newInstance(2026, 10, 1), updatedContract.StartDate);
+    System.assertEquals(Date.newInstance(2027, 10, 1), updatedContract.EndDate);
+    System.assertEquals(12, updatedContract.Term);
+    System.assertEquals(200, Integer.valueOf(updatedContract.Amount_of_Policies__c));
+    System.assertEquals('2000', updatedContract.Policy_Range_Start__c);
+    System.assertEquals('2200', updatedContract.Policy_Range_End__c);
+
+    List<ContractLineItem> lineItems = [
+        SELECT Id,
+               Benefit_Category__c,
+               Quantity,
+               UnitPrice,
+               StartDate,
+               EndDate,
+               PricebookEntry.Product2.Benefit__r.Visa_External_Reference__c
+        FROM ContractLineItem
+        WHERE ServiceContractId = :contract.Id
+        ORDER BY Benefit_Category__c
+    ];
+
+    System.assertEquals(2, lineItems.size());
+
+    System.assertEquals('Core', lineItems[0].Benefit_Category__c);
+    System.assertEquals(200, Integer.valueOf(lineItems[0].Quantity));
+    System.assertEquals(0, lineItems[0].UnitPrice);
+    System.assertEquals(
+        'LACIEMS',
+        lineItems[0].PricebookEntry.Product2.Benefit__r.Visa_External_Reference__c
+    );
+    System.assertEquals(Date.newInstance(2026, 10, 1), lineItems[0].StartDate);
+    System.assertEquals(Date.newInstance(2027, 10, 1), lineItems[0].EndDate);
+
+    System.assertEquals('Optional', lineItems[1].Benefit_Category__c);
+    System.assertEquals(200, Integer.valueOf(lineItems[1].Quantity));
+    System.assertEquals(50, lineItems[1].UnitPrice);
+    System.assertEquals(
+        'LACCELPRO',
+        lineItems[1].PricebookEntry.Product2.Benefit__r.Visa_External_Reference__c
+    );
+}
+
+@isTest
+static void completeBenefitPackage() {
+    ServiceContract contract = [
+        SELECT Id,
+               Package_Status__c,
+               Completed_At__c
+        FROM ServiceContract
+        WHERE RecordType.DeveloperName = :BENEFIT_PACKAGE_RECORD_TYPE
+        LIMIT 1
+    ];
+
+    System.assertEquals('Draft', contract.Package_Status__c);
+    System.assertEquals(null, contract.Completed_At__c);
+
+    RestRequest req = new RestRequest();
+    RestResponse res = new RestResponse();
+
+    req.requestURI = BASE_URI + '/' + contract.Id + '/complete';
+    req.httpMethod = 'POST';
+    req.headers.put('authorization2', 'Bearer ' + token);
+    req.requestBody = Blob.valueOf('{}');
+
+    RestContext.request = req;
+    RestContext.response = res;
+
+    Test.startTest();
+    BenefitsConfigAPIPackages_VEXP.doPost();
+    Test.stopTest();
+
+    System.assertEquals(204, RestContext.response.statusCode);
+
+    ServiceContract completedContract = [
+        SELECT Package_Status__c,
+               Completed_At__c
+        FROM ServiceContract
+        WHERE Id = :contract.Id
+    ];
+
+    System.assertEquals('Awaiting Start', completedContract.Package_Status__c);
+    System.assertNotEquals(null, completedContract.Completed_At__c);
+}
+
+@isTest
+static void completeBenefitPackageWithoutPolicyRange() {
+    ServiceContract contract = [
+        SELECT Id,
+               Policy_Range_Start__c,
+               Policy_Range_End__c
+        FROM ServiceContract
+        WHERE RecordType.DeveloperName = :BENEFIT_PACKAGE_RECORD_TYPE
+        LIMIT 1
+    ];
+
+    contract.Policy_Range_Start__c = null;
+    contract.Policy_Range_End__c = null;
+    update contract;
+
+    RestRequest req = new RestRequest();
+    RestResponse res = new RestResponse();
+
+    req.requestURI = BASE_URI + '/' + contract.Id + '/complete';
+    req.httpMethod = 'POST';
+    req.headers.put('authorization2', 'Bearer ' + token);
+    req.requestBody = Blob.valueOf('{}');
+
+    RestContext.request = req;
+    RestContext.response = res;
+
+    Test.startTest();
+    BenefitsConfigAPIPackages_VEXP.doPost();
+    Test.stopTest();
+
+    System.assertEquals(400, RestContext.response.statusCode);
+
+    WebportalApiUtility_v1.ErrorMessage response =
+        (WebportalApiUtility_v1.ErrorMessage) JSON.deserialize(
+            RestContext.response.responseBody.toString(),
+            WebportalApiUtility_v1.ErrorMessage.class
+        );
+
+    System.assertEquals('400', response.status_code);
+    System.assertEquals(
+        'affected_policy_range.external_number_start_at is required to complete the benefit package.',
+        response.error_description
+    );
+}
+
+@isTest
+static void completeBenefitPackageEmptyBody() {
+    ServiceContract contract = [
+        SELECT Id
+        FROM ServiceContract
+        WHERE RecordType.DeveloperName = :BENEFIT_PACKAGE_RECORD_TYPE
+        LIMIT 1
+    ];
+
+    RestRequest req = new RestRequest();
+    RestResponse res = new RestResponse();
+
+    req.requestURI = BASE_URI + '/' + contract.Id + '/complete';
+    req.httpMethod = 'POST';
+    req.headers.put('authorization2', 'Bearer ' + token);
+    req.requestBody = Blob.valueOf('');
+
+    RestContext.request = req;
+    RestContext.response = res;
+
+    Test.startTest();
+    BenefitsConfigAPIPackages_VEXP.doPost();
+    Test.stopTest();
+
+    System.assertEquals(400, RestContext.response.statusCode);
+
+    WebportalApiUtility_v1.ErrorMessage response =
+        (WebportalApiUtility_v1.ErrorMessage) JSON.deserialize(
+            RestContext.response.responseBody.toString(),
+            WebportalApiUtility_v1.ErrorMessage.class
+        );
+
+    System.assertEquals('400', response.status_code);
+    System.assertEquals('bad_request', response.error);
+    System.assertEquals(
+        'Request body cannot be empty.',
+        response.error_description
+    );
+}
+
+@isTest
+static void cancelBenefitPackage() {
+    ServiceContract contract = [
+        SELECT Id,
+               Package_Status__c,
+               Cancelled_At__c
+        FROM ServiceContract
+        WHERE RecordType.DeveloperName = :BENEFIT_PACKAGE_RECORD_TYPE
+        LIMIT 1
+    ];
+
+    System.assertEquals('Draft', contract.Package_Status__c);
+    System.assertEquals(null, contract.Cancelled_At__c);
+
+    RestRequest req = new RestRequest();
+    RestResponse res = new RestResponse();
+
+    req.requestURI = BASE_URI + '/' + contract.Id + '/cancel';
+    req.httpMethod = 'POST';
+    req.headers.put('authorization2', 'Bearer ' + token);
+
+    RestContext.request = req;
+    RestContext.response = res;
+
+    Test.startTest();
+    BenefitsConfigAPIPackages_VEXP.doPost();
+    Test.stopTest();
+
+    System.assertEquals(204, RestContext.response.statusCode);
+
+    ServiceContract cancelledContract = [
+        SELECT Package_Status__c,
+               Cancelled_At__c
+        FROM ServiceContract
+        WHERE Id = :contract.Id
+    ];
+
+    System.assertEquals('Cancelled', cancelledContract.Package_Status__c);
+    System.assertNotEquals(null, cancelledContract.Cancelled_At__c);
+}
+
+@isTest
+static void cancelBenefitPackageActive() {
+    ServiceContract contract = [
+        SELECT Id,
+               Package_Status__c
+        FROM ServiceContract
+        WHERE RecordType.DeveloperName = :BENEFIT_PACKAGE_RECORD_TYPE
+        LIMIT 1
+    ];
+
+    contract.Package_Status__c = 'Active';
+    update contract;
+
+    RestRequest req = new RestRequest();
+    RestResponse res = new RestResponse();
+
+    req.requestURI = BASE_URI + '/' + contract.Id + '/cancel';
+    req.httpMethod = 'POST';
+    req.headers.put('authorization2', 'Bearer ' + token);
+
+    RestContext.request = req;
+    RestContext.response = res;
+
+    Test.startTest();
+    BenefitsConfigAPIPackages_VEXP.doPost();
+    Test.stopTest();
+
+    System.assertEquals(204, RestContext.response.statusCode);
+
+    ServiceContract cancelledContract = [
+        SELECT Package_Status__c,
+               Cancelled_At__c
+        FROM ServiceContract
+        WHERE Id = :contract.Id
+    ];
+
+    System.assertEquals('Cancelled', cancelledContract.Package_Status__c);
+    System.assertNotEquals(null, cancelledContract.Cancelled_At__c);
+}
+
+@isTest
+static void cancelBenefitPackageAlreadyCancelled() {
+    ServiceContract contract = [
+        SELECT Id,
+               Package_Status__c
+        FROM ServiceContract
+        WHERE RecordType.DeveloperName = :BENEFIT_PACKAGE_RECORD_TYPE
+        LIMIT 1
+    ];
+
+    contract.Package_Status__c = 'Cancelled';
+    update contract;
+
+    RestRequest req = new RestRequest();
+    RestResponse res = new RestResponse();
+
+    req.requestURI = BASE_URI + '/' + contract.Id + '/cancel';
+    req.httpMethod = 'POST';
+    req.headers.put('authorization2', 'Bearer ' + token);
+
+    RestContext.request = req;
+    RestContext.response = res;
+
+    Test.startTest();
+    BenefitsConfigAPIPackages_VEXP.doPost();
+    Test.stopTest();
+
+    System.assertEquals(400, RestContext.response.statusCode);
+
+    WebportalApiUtility_v1.ErrorMessage response =
+        (WebportalApiUtility_v1.ErrorMessage) JSON.deserialize(
+            RestContext.response.responseBody.toString(),
+            WebportalApiUtility_v1.ErrorMessage.class
+        );
+
+    System.assertEquals('400', response.status_code);
+    System.assertEquals(
+        'Benefit package cannot be cancelled because its current status is Cancelled.',
+        response.error_description
+    );
+}
+
+@isTest
+static void cancelBenefitPackageNotFound() {
+    RestRequest req = new RestRequest();
+    RestResponse res = new RestResponse();
+
+    req.requestURI = BASE_URI + '/001000000000000AAA/cancel';
+    req.httpMethod = 'POST';
+    req.headers.put('authorization2', 'Bearer ' + token);
+
+    RestContext.request = req;
+    RestContext.response = res;
+
+    Test.startTest();
+    BenefitsConfigAPIPackages_VEXP.doPost();
+    Test.stopTest();
+
+    System.assertEquals(404, RestContext.response.statusCode);
+
+    WebportalApiUtility_v1.ErrorMessage response =
+        (WebportalApiUtility_v1.ErrorMessage) JSON.deserialize(
+            RestContext.response.responseBody.toString(),
+            WebportalApiUtility_v1.ErrorMessage.class
+        );
+
+    System.assertEquals('404', response.status_code);
+    System.assertEquals('Not Found', response.error);
+    System.assertEquals(
+        'The searched resource was not found.',
+        response.error_description
+    );
+}
+
+@isTest
+static void updateBenefitPackageWithPolicyRangeMissingStart() {
+    ServiceContract contract = [
+        SELECT Id
+        FROM ServiceContract
+        WHERE RecordType.DeveloperName = :BENEFIT_PACKAGE_RECORD_TYPE
+        LIMIT 1
+    ];
+
+    Map<String, Object> body =
+        (Map<String, Object>) JSON.deserializeUntyped(requestBody);
+
+    body.put(
+        'affected_policy_range',
+        new Map<String, Object>{
+            'external_number_end_at' => '2200'
+        }
+    );
+
+    RestRequest req = new RestRequest();
+    RestResponse res = new RestResponse();
+
+    req.requestURI = BASE_URI + '/' + contract.Id;
+    req.httpMethod = 'PATCH';
+    req.headers.put('authorization2', 'Bearer ' + token);
+    req.requestBody = Blob.valueOf(JSON.serialize(body));
+
+    RestContext.request = req;
+    RestContext.response = res;
+
+    Test.startTest();
+    BenefitsConfigAPIPackages_VEXP.doPatch();
+    Test.stopTest();
+
+    System.assertEquals(400, RestContext.response.statusCode);
+}
