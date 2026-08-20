@@ -1,9 +1,96 @@
-11. PATCH /benefit_packages/{benefit_package_id} — update
-Response 204 with no body.
+private static void replaceBenefitLines(ServiceContract contract, BenefitPackage request, Map<String, Object> body) {
+    Boolean replaceCore = body.containsKey('core_benefits');
+    Boolean replaceOptional = body.containsKey('optional_benefits');
 
-Accepted only when Package_Status__c = 'Draft'. Any other status yields 400 bad_request with an error description naming the current status. 403 is not used here: the caller holds the right scope and the right bank, the resource state is what forbids the operation.
-Attributes present in the body are applied; absent attributes are left untouched.
-core_benefits and optional_benefits, when present, replace the corresponding lines entirely: the existing lines of that category are deleted and the submitted set is inserted. Merge semantics were discarded because the contract offers no removal operation, so a merge would make it impossible to deselect a benefit the agent had previously chosen — the New package flow lets an agent toggle optional benefits freely.
-Sending an empty array is a rejection, not a clearing: the contract declares minItems: 1 for both collections. Clearing every core benefit would produce a package that can never be completed.
-benefit_package_id and status in the body are ignored; both are readOnly.
-Delete plus insert of the lines runs in the same transaction as the header update. Where a package carries the contract maximum of 100 core and 100 optional benefits, a full replacement is 200 rows deleted and 200 inserted — well inside DML row limits, and the reason the operation stays synchronous.
+    if (!replaceCore && !replaceOptional) {
+        return;
+    }
+
+    Map<String, Benefit__c> benefitsByReference =
+        getBenefitsByExternalReference(request, replaceCore, replaceOptional);
+
+    Map<String, PricebookEntry> pricebookEntriesByBenefit =
+        getPricebookEntriesByBenefitReference(benefitsByReference, 'USD');
+
+    deleteReplacedBenefitLines(contract.ContractLineItems, replaceCore, replaceOptional);
+
+    Set<String> categories = new Set<String>();
+
+    if (replaceCore) {
+        categories.add(CATEGORY_CORE);
+    }
+
+    if (replaceOptional) {
+        categories.add(CATEGORY_OPTIONAL);
+    }
+
+    Integer quantity = contract.Amount_of_Policies__c == null
+        ? 0
+        : Integer.valueOf(contract.Amount_of_Policies__c);
+
+    List<ContractLineItem> newLineItems = buildContractLineItems(
+        contract.Id,
+        request,
+        contract.StartDate,
+        contract.EndDate,
+        benefitsByReference,
+        pricebookEntriesByBenefit,
+        categories,
+        quantity
+    );
+
+    if (!newLineItems.isEmpty()) {
+        insert newLineItems;
+    }
+}
+
+------------
+@isTest
+static void updateBenefitPackageWithoutOptionalBenefits() {
+    ServiceContract contract = getBenefitPackage();
+
+    Map<String, Object> body = buildUpdateBenefitPackageBody();
+    body.remove('optional_benefits');
+
+    executePatch(contract.Id, body);
+
+    System.assertEquals(204, RestContext.response.statusCode);
+
+    List<ContractLineItem> lineItems = getBenefitPackageLineItems(contract.Id);
+
+    System.assertEquals(2, lineItems.size());
+    System.assertEquals('Core', lineItems[0].Benefit_Category__c);
+    System.assertEquals('Optional', lineItems[1].Benefit_Category__c);
+}
+
+@isTest
+static void updateBenefitPackageWithEmptyOptionalBenefits() {
+    ServiceContract contract = getBenefitPackage();
+
+    Map<String, Object> body = buildUpdateBenefitPackageBody();
+    body.put('optional_benefits', new List<Object>());
+
+    executePatch(contract.Id, body);
+
+    System.assertEquals(400, RestContext.response.statusCode);
+
+    WebportalApiUtility_v1.ErrorMessage response =
+        (WebportalApiUtility_v1.ErrorMessage) JSON.deserialize(
+            RestContext.response.responseBody.toString(),
+            WebportalApiUtility_v1.ErrorMessage.class
+        );
+
+    System.assertEquals('400', response.status_code);
+}
+
+@isTest
+static void updateBenefitPackageWithEmptyCoreBenefits() {
+    ServiceContract contract = getBenefitPackage();
+
+    Map<String, Object> body = buildUpdateBenefitPackageBody();
+    body.put('core_benefits', new List<Object>());
+
+    executePatch(contract.Id, body);
+
+    System.assertEquals(400, RestContext.response.statusCode);
+}
