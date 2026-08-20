@@ -1,239 +1,176 @@
-//=============================VALIDAÇÕES========================================================================================
+    //=======================================================BUILDS========================================================================================
+    private static ServiceContract buildServiceContract(BenefitPackage request, Product__c product, Id pricebookId, Date startDate, Date endDate) {
+        ServiceContract contract = new ServiceContract();
+        contract.Name = '-';
+        contract.RecordTypeId = Schema.SObjectType.ServiceContract.getRecordTypeInfosByDeveloperName().get(BENEFIT_PACKAGE_RECORD_TYPE).getRecordTypeId();
+        contract.Pricebook2Id = pricebookId;
+        contract.Package_Status__c = PACKAGE_STATUS.get('DRAFT');
+        contract.Product_Reference__c = request.product_reference;
+        contract.Product__c = product.Id;
+        contract.StartDate = startDate;
+        contract.EndDate = endDate;
+        contract.Term = calculateWholeMonthTerm(startDate, endDate);
+        contract.Amount_of_Policies__c = request.amount_of_policies;
 
-private static void validateCreateRequest(
-    BenefitPackage request,
-    Date startDate,
-    Date endDate
-) {
-    validateDates(startDate, endDate);
-    validateAmountOfPolicies(request.amount_of_policies);
-
-    validateBenefits(
-        request.core_benefits == null ? null : request.core_benefits.size(),
-        'core_benefits',
-        true
-    );
-
-    validateBenefits(
-        request.optional_benefits == null ? null : request.optional_benefits.size(),
-        'optional_benefits',
-        false
-    );
-}
-
-private static void validateCompleteRequest(ServiceContract contract) {
-    validateCompleteFields(contract);
-    validateDates(contract.StartDate, contract.EndDate);
-    validateCoreLineItemExists(contract.ContractLineItems);
-}
-
-private static void validateCompleteFields(ServiceContract contract) {
-    validateRequiredField(contract.Product_Reference__c, 'product_reference');
-    validateRequiredField(contract.Amount_of_Policies__c, 'amount_of_policies');
-    validateRequiredField(contract.StartDate, 'active_start_at');
-    validateRequiredField(contract.EndDate, 'active_end_at');
-    validateRequiredField(
-        contract.Policy_Range_Start__c,
-        'affected_policy_range.external_number_start_at'
-    );
-    validateRequiredField(
-        contract.Policy_Range_End__c,
-        'affected_policy_range.external_number_end_at'
-    );
-
-    validateAmountOfPolicies(
-        Integer.valueOf(contract.Amount_of_Policies__c)
-    );
-}
-
-private static void validateRequiredField(Object value, String fieldName) {
-    if (value == null ||
-        (value instanceof String && String.isBlank((String) value))) {
-        throw new WebportalApiUtility_v1.RequestAPIException(
-            400,
-            'bad_request',
-            fieldName + ' is required to complete the benefit package.'
-        );
-    }
-}
-
-private static void validatePatchRequest(
-    BenefitPackage request,
-    Map<String, Object> body,
-    ServiceContract contract
-) {
-    if (body.containsKey('active_start_at') ||
-        body.containsKey('active_end_at')) {
-
-        Date startDate = body.containsKey('active_start_at')
-            ? normalizeStartDate(request.active_start_at)
-            : contract.StartDate;
-
-        Date endDate = body.containsKey('active_end_at')
-            ? request.active_end_at
-            : contract.EndDate;
-
-        validateDates(startDate, endDate);
-    }
-
-    if (body.containsKey('amount_of_policies')) {
-        validateAmountOfPolicies(request.amount_of_policies);
-    }
-
-    if (body.containsKey('affected_policy_range')) {
-        validatePolicyRangePatch(request);
-    }
-
-    if (body.containsKey('core_benefits')) {
-        validateBenefits(
-            request.core_benefits == null
-                ? null
-                : request.core_benefits.size(),
-            'core_benefits',
-            true
-        );
-    }
-
-    if (body.containsKey('optional_benefits')) {
-        validateBenefits(
-            request.optional_benefits == null
-                ? null
-                : request.optional_benefits.size(),
-            'optional_benefits',
-            true
-        );
-    }
-}
-
-private static void validateDates(Date startDate, Date endDate) {
-    if (startDate == null) {
-        throw new WebportalApiUtility_v1.RequestAPIException(
-            400,
-            'bad_request',
-            'active_start_at is required.'
-        );
-    }
-
-    if (endDate == null) {
-        throw new WebportalApiUtility_v1.RequestAPIException(
-            400,
-            'bad_request',
-            'active_end_at is required.'
-        );
-    }
-
-    if (endDate <= startDate) {
-        throw new WebportalApiUtility_v1.RequestAPIException(
-            400,
-            'bad_request',
-            'active_end_at must be greater than active_start_at.'
-        );
-    }
-}
-
-private static void validateAmountOfPolicies(Integer amountOfPolicies) {
-    if (amountOfPolicies != null && amountOfPolicies < 1) {
-        throw new WebportalApiUtility_v1.RequestAPIException(
-            400,
-            'bad_request',
-            'amount_of_policies must be a positive integer.'
-        );
-    }
-}
-
-private static void validateBenefits(
-    Integer benefitCount,
-    String fieldName,
-    Boolean required
-) {
-    if (required && (benefitCount == null || benefitCount == 0)) {
-        throw new WebportalApiUtility_v1.RequestAPIException(
-            400,
-            'bad_request',
-            fieldName + ' must contain at least one benefit.'
-        );
-    }
-
-    if (benefitCount != null && benefitCount > MAX_BENEFITS) {
-        throw new WebportalApiUtility_v1.RequestAPIException(
-            400,
-            'bad_request',
-            fieldName + ' cannot contain more than ' +
-            MAX_BENEFITS + ' benefits.'
-        );
-    }
-}
-
-private static void validateCoreLineItemExists(
-    List<ContractLineItem> lineItems
-) {
-    if (lineItems == null) {
-        throw new WebportalApiUtility_v1.RequestAPIException(
-            400,
-            'bad_request',
-            'At least one Core benefit is required to complete the benefit package.'
-        );
-    }
-
-    for (ContractLineItem lineItem : lineItems) {
-        if (lineItem.Benefit_Category__c == CATEGORY_CORE) {
-            return;
+        if (request.affected_policy_range != null) {
+            contract.Policy_Range_Start__c = request.affected_policy_range.external_number_start_at;
+            contract.Policy_Range_End__c = request.affected_policy_range.external_number_end_at;
         }
+
+        populateLegalConsents(contract, request);
+
+        return contract;
     }
 
-    throw new WebportalApiUtility_v1.RequestAPIException(
-        400,
-        'bad_request',
-        'At least one Core benefit is required to complete the benefit package.'
-    );
-}
+    private static List<ContractLineItem> buildContractLineItems(
+        Id contractId,
+        BenefitPackage request,
+        Date startDate,
+        Date endDate,
+        Map<String, Benefit__c> benefitsByReference,
+        Map<String, PricebookEntry> pricebookEntriesByBenefit,
+        Set<String> categories,
+        Integer quantity) {
 
-private static void validatePolicyRangePatch(BenefitPackage request) {
-    if (request.affected_policy_range == null) {
-        throw new WebportalApiUtility_v1.RequestAPIException(
-            400,
-            'bad_request',
-            'affected_policy_range cannot be null.'
-        );
+        List<ContractLineItem> lineItems = new List<ContractLineItem>();
+
+        if (categories.contains(CATEGORY_CORE) && request.core_benefits != null) {
+            for (CoreBenefit coreBenefit : request.core_benefits) {
+                lineItems.add(
+                    buildContractLineItem(
+                        contractId,
+                        quantity,
+                        startDate,
+                        endDate,
+                        benefitsByReference.get(coreBenefit.benefit_id),
+                        pricebookEntriesByBenefit.get(coreBenefit.benefit_id),
+                        CATEGORY_CORE,
+                        0
+                    )
+                );
+            }
+        }
+
+        if (categories.contains(CATEGORY_OPTIONAL) &&
+            request.optional_benefits != null) {
+
+            for (OptionalBenefit optionalBenefit : request.optional_benefits) {
+                PricebookEntry pricebookEntry = pricebookEntriesByBenefit.get(optionalBenefit.benefit_id);
+                lineItems.add(
+                    buildContractLineItem(
+                        contractId,
+                        quantity,
+                        startDate,
+                        endDate,
+                        benefitsByReference.get(optionalBenefit.benefit_id),
+                        pricebookEntry,
+                        CATEGORY_OPTIONAL,
+                        pricebookEntry == null ? null : pricebookEntry.UnitPrice
+                    )
+                );
+            }
+        }
+
+        return lineItems;
     }
 
-    WebportalApiUtility_v1.runValidateRequiredFields(
-        JSON.serialize(request.affected_policy_range),
-        POLICY_RANGE_REQUIRED_FIELDS
-    );
-}
+    private static ContractLineItem buildContractLineItem(Id contractId, Integer quantity, Date startDate, Date endDate, Benefit__c benefit, PricebookEntry pricebookEntry, String category, Decimal unitPrice) {
+        if (benefit == null) {
+            throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'Benefit could not be resolved.');
+        }
+        if (pricebookEntry == null) {
+            throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'No PricebookEntry was found for benefit ' + benefit.Name + ' in the Visa Benefits Pricebook.');
+        }
 
-private static void validateDraftStatus(
-    ServiceContract contract,
-    String operation
-) {
-    if (contract.Package_Status__c != 'Draft') {
-        throw new WebportalApiUtility_v1.RequestAPIException(
-            400,
-            'bad_request',
-            'Benefit package cannot be ' + operation +
-            ' because its current status is ' +
-            contract.Package_Status__c + '.'
+        ContractLineItem lineItem = new ContractLineItem(
+            ServiceContractId = contractId,
+            PricebookEntryId = pricebookEntry.Id,
+            Benefit_Category__c = category,
+            Quantity = quantity,
+            UnitPrice = unitPrice,
+            StartDate = startDate,
+            EndDate = endDate
         );
+
+        return lineItem;
+    }  
+
+    private static List<SimplifiedBenefitPackage> buildBenefitPackageListResponse(List<ServiceContract> contracts) {
+        List<SimplifiedBenefitPackage> response = new List<SimplifiedBenefitPackage>();
+
+        for (ServiceContract contract : contracts) {
+            SimplifiedBenefitPackage item = new SimplifiedBenefitPackage();
+            item.status = contract.Package_Status__c;
+            item.benefit_package_id = contract.Id;
+            item.product_reference = contract.Product_Reference__c;
+            item.active_start_at = contract.StartDate;
+            item.active_end_at = contract.EndDate;
+            item.amount_of_policies = contract.Amount_of_Policies__c == null ? null : Integer.valueOf(contract.Amount_of_Policies__c);
+            response.add(item);
+        }
+
+        return response;
     }
-}
 
-private static Map<String, Integer> validateGetRequest(
-    Map<String, String> requestParams
-) {
-    Map<String, Integer> paginationParams =
-        WebportalApiUtility_v1.validatePaginationQueryParams(
-            requestParams,
-            100
-        );
-
-    if (paginationParams.get('start_index') > 2000) {
-        throw new WebportalApiUtility_v1.RequestAPIException(
-            400,
-            'bad_request',
-            'start_index cannot be greater than 2000.'
-        );
+    private static BenefitPackage buildBenefitPackageResponse(ServiceContract contract, List<ContractLineItem> lineItems) {
+        BenefitPackage response = initializeBenefitPackageResponse(contract);
+        for (ContractLineItem lineItem : lineItems) {
+            if (lineItem.Benefit_Category__c == CATEGORY_CORE) {
+                response.core_benefits.add(buildCoreBenefit(lineItem));
+            } else if (lineItem.Benefit_Category__c == CATEGORY_OPTIONAL) {
+                response.optional_benefits.add(buildOptionalBenefit(lineItem));
+            }
+        }
+        return response;
     }
 
-    return paginationParams;
-}
+    private static BenefitPackage initializeBenefitPackageResponse(ServiceContract contract) {
+        BenefitPackage response = new BenefitPackage();
+        response.status = contract.Package_Status__c;
+        response.benefit_package_id = contract.Id;
+        response.product_reference = contract.Product_Reference__c;
+        response.active_start_at = contract.StartDate;
+        response.active_end_at = contract.EndDate;
+        response.amount_of_policies = contract.Amount_of_Policies__c == null ? null : Integer.valueOf(contract.Amount_of_Policies__c);
+        response.affected_policy_range = buildAffectedPolicyRange(contract);
+        response.core_benefits = new List<CoreBenefit>();
+        response.optional_benefits = new List<OptionalBenefit>();
+        response.legal_consents = buildLegalConsentResponse(contract);
+        return response;
+    }
+
+    private static AffectedPolicyRange buildAffectedPolicyRange(ServiceContract contract) {
+        AffectedPolicyRange affectedPolicyRange = new AffectedPolicyRange();
+        affectedPolicyRange.external_number_start_at = contract.Policy_Range_Start__c;
+        affectedPolicyRange.external_number_end_at = contract.Policy_Range_End__c;
+        return affectedPolicyRange;
+    }
+
+    private static CoreBenefit buildCoreBenefit(ContractLineItem lineItem) {
+        CoreBenefit coreBenefit = new CoreBenefit();
+        coreBenefit.benefit_id = lineItem.PricebookEntry.Product2.Benefit__r.Visa_External_Reference__c;
+        coreBenefit.name = lineItem.PricebookEntry.Product2.Benefit__r.Name;
+        return coreBenefit;
+    }
+
+    private static OptionalBenefit buildOptionalBenefit(ContractLineItem lineItem) {
+        OptionalBenefit optionalBenefit = new OptionalBenefit();
+        optionalBenefit.benefit_id = lineItem.PricebookEntry.Product2.Benefit__r.Visa_External_Reference__c;
+        optionalBenefit.name = lineItem.PricebookEntry.Product2.Benefit__r.Name;
+        optionalBenefit.description = lineItem.PricebookEntry.Product2.Benefit__r.Benefit_Description__c;
+        return optionalBenefit;
+    }
+
+    private static List<LegalConsentItem> buildLegalConsentResponse(ServiceContract contract) {
+        List<LegalConsentItem> legalConsents = new List<LegalConsentItem>();
+        
+        if (String.isBlank(contract.Legal_Consent_Code__c)) {
+            return legalConsents;
+        }
+        LegalConsentItem consent = new LegalConsentItem();
+        consent.code = contract.Legal_Consent_Code__c;
+        consent.is_confirmed = contract.Legal_Consent_Confirmed__c;
+        consent.consented_at = contract.Legal_Consent_Date__c == null ? null : contract.Legal_Consent_Date__c.formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\'');
+        legalConsents.add(consent);
+        return legalConsents;
+    }
