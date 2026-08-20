@@ -1,106 +1,14 @@
-01:05:42.367 (12400283262)|STATEMENT_EXECUTE|[1767]
-01:05:42.367 (12400285594)|VARIABLE_ASSIGNMENT|[1767]|this.error|"Bad Request"|0x1229b272
-01:05:42.367 (12400287943)|STATEMENT_EXECUTE|[1768]
-01:05:42.367 (12400290410)|VARIABLE_ASSIGNMENT|[1768]|this.error_description|"Invalid request body (40 more) ..."|0x1229b272
-01:05:42.367 (12400294842)|CONSTRUCTOR_EXIT|[470]|01p0N00000ASuS7|<init>(String,String,String)|WebportalApiUtility_v1.ErrorMessage
-01:05:42.367 (12400302002)|METHOD_ENTRY|[469]||System.JSON.serializePretty(Object, Boolean)
-01:05:42.367 (12400354159)|METHOD_EXIT|[469]||System.JSON.serializePretty(Object, Boolean)
-01:05:42.367 (12400384742)|HEAP_ALLOCATE|[468]|Bytes:4
-01:05:42.367 (12400406928)|METHOD_EXIT|[83]|01pbY000005PNHt|BenefitsConfigAPIPackages_VEXP.handlePatch(String)
-01:05:42.367 (12400412141)|SYSTEM_MODE_EXIT|false
-01:05:42.367 (12400417273)|METHOD_EXIT|[1635]|01pbY000005PNHt|BenefitsConfigAPIPackages_VEXP.doPatch()
-01:05:42.367 (12400419658)|STATEMENT_EXECUTE|[1636]
-01:05:42.367 (12400425233)|METHOD_ENTRY|[1636]||System.Test.stopTest()
-01:05:42.367 (12400479950)|METHOD_EXIT|[1636]||System.Test.stopTest()
-01:05:42.367 (12400483326)|METHOD_EXIT|[1613]|01pbY000005PdOH|Test_BenefitsConfigAPIPackages_VEXP.executePatch(Id, Map<String,ANY>, Boolean)
-01:05:42.367 (12400509227)|METHOD_EXIT|[1572]|01pbY000005PdOH|Test_BenefitsConfigAPIPackages_VEXP.executePatch(Id, Map<String,ANY>)
-01:05:42.367 (12400512492)|STATEMENT_EXECUTE|[1574]
-01:05:42.367 (12400567203)|EXCEPTION_THROWN|[1574]|System.AssertException: Assertion Failed: Expected: 204, Actual: 400
-01:05:42.367 (12400614104)|HEAP_ALLOCATE|[1574]|Bytes:48
-01:05:42.367 (12400664083)|FATAL_ERROR|System.AssertException: Assertion Failed: Expected: 204, Actual: 400
+    private static void validatePolicyRange(BenefitPackage request) {
+        if (request.affected_policy_range == null) {
+            throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'affected_policy_range cannot be null.');
+        }
+        WebportalApiUtility_v1.runValidateRequiredFields(JSON.serialize(request.affected_policy_range), POLICY_RANGE_REQUIRED_FIELDS);
+    }
 
-Class.Test_BenefitsConfigAPIPackages_VEXP.updateBenefitPackageWithoutOptionalBenefits: line 1574, column 1
-01:05:42.367 (12400671902)|FATAL_ERROR|System.AssertException: Assertion Failed: Expected: 204, Actual: 400
+    private static final Map<String, String> POLICY_RANGE_REQUIRED_FIELDS =
+        new Map<String, String>{
+            'affected_policy_range' => 'Object',
+            'affected_policy_range.external_number_start_at' => 'Primitive',
+            'affected_policy_range.external_number_end_at' => 'Primitive'
+        };
 
-Class.Test_BenefitsConfigAPIPackages_VEXP.updateBenefitPackageWithoutOptionalBenefits: line 1574, column 1
-
-01:05:40.164 (10195162558)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x24eed131
-01:05:40.164 (10195167794)|VARIABLE_ASSIGNMENT|[EXTERNAL]|value|"Bad Request"
-01:05:40.164 (10195171044)|STATEMENT_EXECUTE|[450]
-01:05:40.164 (10195171956)|STATEMENT_EXECUTE|[450]
-01:05:40.164 (10195175382)|VARIABLE_ASSIGNMENT|[450]|this.error|"Bad Request"|0x4e41af7e
-01:05:40.164 (10195180117)|STATEMENT_EXECUTE|[440]
-01:05:40.164 (10195198574)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x29f83f47
-01:05:40.164 (10195204255)|VARIABLE_ASSIGNMENT|[EXTERNAL]|value|"Invalid request body (40 more) ..."
-01:05:40.164 (10195207166)|STATEMENT_EXECUTE|[455]
-01:05:40.164 (10195207902)|STATEMENT_EXECUTE|[455]
-01:05:40.164 (10195211171)|VARIABLE_ASSIGNMENT|[455]|this.error_Description|"Invalid request body (40 more) ..."|0x4e41af7e
-01:05:40.164 (10195221409)|CONSTRUCTOR_EXIT|[557]|01p0N00000ASuS7|<init>(Integer,String,String)|WebportalApiUtility_v1.RequestAPIException
-01:05:40.164 (10195237521)|EXCEPTION_THROWN|[557]|WebportalApiUtility_v1.RequestAPIException: Script-thrown exception
-01:05:40.164 (10195249089)|EXCEPTION_THROWN|[556]|WebportalApiUtility_v1.RequestAPIException: Script-thrown exception
-01:05:40.164 (10195254187)|METHOD_EXIT|[909]|01p0N00000ASuS7|WebportalApiUtility_v1.runValidateRequiredFields(String, Map<String,String>)
-01:05:40.164 (10195261847)|EXCEPTION_THROWN|[909]|WebportalApiUtility_v1.RequestAPIException: Script-thrown exception
-01:05:40.164 (10195266176)|METHOD_EXIT|[854]|01pbY000005PNHt|BenefitsConfigAPIPackages_VEXP.validatePolicyRange(BenefitsConfigAPIPackages_VEXP.BenefitPackage)
-01:05:40.164 (10195273865)|EXCEPTION_THROWN|[859]|WebportalApiUtility_v1.RequestAPIException: Script-thrown exception
-01:05:40.164 (10195279155)|METHOD_EXIT|[453]|01pbY000005PNHt|BenefitsConfigAPIPackages_VEXP.validatePatchRequest(BenefitsConfigAPIPackages_VEXP.BenefitPackage, Map<String,ANY>, ServiceContract)
-01:05:40.164 (10195295716)|VARIABLE_SCOPE_BEGIN|[466]|ex|WebportalApiUtility_v1.RequestAPIException|true|false
-01:05:40.164 (10195317633)|VARIABLE_ASSIGNMENT|[466]|ex|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x27e500b0
-01:05:40.164 (10195320998)|STATEMENT_EXECUTE|[466]
-01:05:40.164 (10195321816)|STATEMENT_EXECUTE|[467]
-01:05:40.164 (10195358359)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x649c616d
-01:05:40.164 (10195362137)|STATEMENT_EXECUTE|[444]
-01:05:40.164 (10195363027)|STATEMENT_EXECUTE|[444]
-01:05:40.164 (10195388085)|STATEMENT_EXECUTE|[468]
-01:05:40.164 (10195394582)|HEAP_ALLOCATE|[470]|Bytes:4
-01:05:40.164 (10195399612)|HEAP_ALLOCATE|[470]|Bytes:16
-01:05:40.164 (10195421424)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x36a95396
-01:05:40.164 (10195424803)|STATEMENT_EXECUTE|[444]
-01:05:40.164 (10195425500)|STATEMENT_EXECUTE|[444]
-01:05:40.164 (10195439133)|HEAP_ALLOCATE|[471]|Bytes:3
-01:05:40.164 (10195464113)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x5ec35003
-01:05:40.164 (10195468019)|STATEMENT_EXECUTE|[449]
-01:05:40.164 (10195468725)|STATEMENT_EXECUTE|[449]
-01:05:40.164 (10195490219)|VARIABLE_ASSIGNMENT|[EXTERNAL]|this|"common.apex.runtime.impl.ExecutionException: Script-thrown exception"|0x512c3beb
-01:05:40.164 (10195493904)|STATEMENT_EXECUTE|[454]
-01:05:40.164 (10195494723)|STATEMENT_EXECUTE|[454]
-01:05:40.164 (10195502314)|CONSTRUCTOR_ENTRY|[470]|01p0N00000ASuS7|<init>(String,String,String)|WebportalApiUtility_v1.ErrorMessage
-01:05:40.164 (10195552241)|VARIABLE_SCOPE_BEGIN|[1765]|this|WebportalApiUtility_v1.ErrorMessage|true|false
-01:05:40.164 (10195573581)|VARIABLE_ASSIGNMENT|[1765]|this|{}|0x563cafaa
-01:05:40.164 (10195577146)|VARIABLE_SCOPE_BEGIN|[1765]|statusCode|String|false|false
-01:05:40.164 (10195581976)|VARIABLE_ASSIGNMENT|[1765]|statusCode|"400"
-01:05:40.164 (10195584517)|VARIABLE_SCOPE_BEGIN|[1765]|error|String|false|false
-01:05:40.164 (10195589277)|VARIABLE_ASSIGNMENT|[1765]|error|"Bad Request"
-01:05:40.164 (10195591676)|VARIABLE_SCOPE_BEGIN|[1765]|errorDescription|String|false|false
-01:05:40.164 (10195596947)|VARIABLE_ASSIGNMENT|[1765]|errorDescription|"Invalid request body (40 more) ..."
-01:05:40.164 (10195600173)|STATEMENT_EXECUTE|[1760]
-01:05:40.164 (10195601053)|STATEMENT_EXECUTE|[1761]
-01:05:40.164 (10195601923)|STATEMENT_EXECUTE|[1762]
-01:05:40.164 (10195602716)|STATEMENT_EXECUTE|[1763]
-01:05:40.164 (10195610396)|STATEMENT_EXECUTE|[1765]
-01:05:40.164 (10195611302)|STATEMENT_EXECUTE|[1766]
-01:05:40.164 (10195614752)|VARIABLE_ASSIGNMENT|[1766]|this.status_code|"400"|0x563cafaa
-01:05:40.164 (10195617791)|STATEMENT_EXECUTE|[1767]
-01:05:40.164 (10195620684)|VARIABLE_ASSIGNMENT|[1767]|this.error|"Bad Request"|0x563cafaa
-01:05:40.164 (10195623491)|STATEMENT_EXECUTE|[1768]
-01:05:40.164 (10195626554)|VARIABLE_ASSIGNMENT|[1768]|this.error_description|"Invalid request body (40 more) ..."|0x563cafaa
-01:05:40.164 (10195632357)|CONSTRUCTOR_EXIT|[470]|01p0N00000ASuS7|<init>(String,String,String)|WebportalApiUtility_v1.ErrorMessage
-01:05:40.164 (10195641246)|METHOD_ENTRY|[469]||System.JSON.serializePretty(Object, Boolean)
-01:05:40.164 (10195706796)|METHOD_EXIT|[469]||System.JSON.serializePretty(Object, Boolean)
-01:05:40.164 (10195771695)|HEAP_ALLOCATE|[468]|Bytes:4
-01:05:40.164 (10195794639)|METHOD_EXIT|[83]|01pbY000005PNHt|BenefitsConfigAPIPackages_VEXP.handlePatch(String)
-01:05:40.164 (10195802662)|SYSTEM_MODE_EXIT|false
-01:05:40.164 (10195807813)|METHOD_EXIT|[1635]|01pbY000005PNHt|BenefitsConfigAPIPackages_VEXP.doPatch()
-01:05:40.164 (10195810082)|STATEMENT_EXECUTE|[1636]
-01:05:40.164 (10195815834)|METHOD_ENTRY|[1636]||System.Test.stopTest()
-01:05:40.164 (10195876629)|METHOD_EXIT|[1636]||System.Test.stopTest()
-01:05:40.164 (10195880093)|METHOD_EXIT|[1613]|01pbY000005PdOH|Test_BenefitsConfigAPIPackages_VEXP.executePatch(Id, Map<String,ANY>, Boolean)
-01:05:40.164 (10195884433)|METHOD_EXIT|[1299]|01pbY000005PdOH|Test_BenefitsConfigAPIPackages_VEXP.executePatch(Id, Map<String,ANY>)
-01:05:40.164 (10195886787)|STATEMENT_EXECUTE|[1301]
-01:05:40.164 (10195968295)|EXCEPTION_THROWN|[1301]|System.AssertException: Assertion Failed: Expected: 204, Actual: 400
-01:05:40.164 (10196045506)|HEAP_ALLOCATE|[1301]|Bytes:48
-01:05:40.164 (10196142870)|FATAL_ERROR|System.AssertException: Assertion Failed: Expected: 204, Actual: 400
-
-Class.Test_BenefitsConfigAPIPackages_VEXP.updateBenefitPackage: line 1301, column 1
-01:05:40.164 (10196199245)|FATAL_ERROR|System.AssertException: Assertion Failed: Expected: 204, Actual: 400
-
-Class.Test_BenefitsConfigAPIPackages_VEXP.updateBenefitPackage: line 1301, column 1
