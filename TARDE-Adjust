@@ -1,32 +1,39 @@
-    private static void validateCoreBenefits(List<CoreBenefit> benefits, Boolean required) {
-        if (required && (benefits == null || benefits.isEmpty())) {
-            throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'core_benefits must contain at least one benefit.');
-        }
-
-        if (benefits != null && benefits.size() > MAX_BENEFITS) {
-            throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'core_benefits cannot contain more than ' + MAX_BENEFITS + ' benefits.');
-        }
+private static void validateBenefits(Integer benefitCount, String fieldName, Boolean required) {
+    if (required && (benefitCount == null || benefitCount == 0)) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            fieldName + ' must contain at least one benefit.'
+        );
     }
 
-    private static void validateOptionalBenefits(List<OptionalBenefit> benefits) {
-        if (benefits != null && benefits.size() > MAX_BENEFITS) {
-            throw new WebportalApiUtility_v1.RequestAPIException(
-                400, 'bad_request', 'optional_benefits cannot contain more than ' + MAX_BENEFITS + ' benefits.'
-            );
-        }
+    if (benefitCount != null && benefitCount > MAX_BENEFITS) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            fieldName + ' cannot contain more than ' + MAX_BENEFITS + ' benefits.'
+        );
+    }
+}
+
+private static void validateBenefitReplacementRequest(
+    BenefitPackage request,
+    Boolean replaceCore,
+    Boolean replaceOptional
+) {
+    if (replaceCore) {
+        validateBenefits(
+            request.core_benefits == null ? null : request.core_benefits.size(),
+            'core_benefits',
+            true
+        );
     }
 
-    private static void validateBenefitReplacementRequest(BenefitPackage request, Boolean replaceCore, Boolean replaceOptional) {
-        if (replaceCore) {
-            validateCoreBenefits(request.core_benefits, true);
-        }
-
-        if (replaceOptional) {
-            if (request.optional_benefits == null || request.optional_benefits.isEmpty()) {
-                throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'optional_benefits must contain at least one benefit.');
-            }
-            validateOptionalBenefits(
-                request.optional_benefits
-            );
-        }
+    if (replaceOptional) {
+        validateBenefits(
+            request.optional_benefits == null ? null : request.optional_benefits.size(),
+            'optional_benefits',
+            true
+        );
     }
+}
