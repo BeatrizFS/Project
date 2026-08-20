@@ -1,115 +1,177 @@
-    private static final Map<String, String> CREATE_REQUIRED_FIELDS =
-        new Map<String, String>{
-            'product_reference' => 'Primitive',
-            'active_start_at' => 'Primitive',
-            'active_end_at' => 'Primitive',
-            'core_benefits' => 'List',
-            'core_benefits.benefit_id' => 'Primitive',
-            'core_benefits.name' => 'Primitive',
-            'optional_benefits.benefit_id' => 'Primitive',
-            'optional_benefits.name' => 'Primitive',
-            'amount_of_policies' => 'Primitive'
-        };
-
-    private static final Map<String, String> UPDATE_REQUIRED_FIELDS =
-        new Map<String, String>{
-            'affected_policy_range' => 'Object',
-            'affected_policy_range.external_number_start_at' => 'Primitive',
-            'affected_policy_range.external_number_end_at' => 'Primitive'
-        };
-
-WebportalApiUtility_v1.runValidateRequiredFields(requestBody, CREATE_REQUIRED_FIELDS); -- Metodo que verifica campos requiridos
-
 private static void validateCreateRequest(BenefitPackage request, Date startDate, Date endDate) {
-        validateDates(startDate, endDate);
-        validateAmountOfPolicies(request.amount_of_policies);
-        validateBenefits(request.core_benefits, true);
+    validateDates(startDate, endDate);
+    validateAmountOfPolicies(request.amount_of_policies);
+    validateBenefits(request.core_benefits.size(), 'core_benefits', true);
+    validateBenefits(
+        request.optional_benefits == null ? null : request.optional_benefits.size(),
+        'optional_benefits',
+        false
+    );
+}
+
+private static void validateBenefits(Integer benefitCount, String fieldName, Boolean required) {
+    if (required && (benefitCount == null || benefitCount == 0)) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            fieldName + ' must contain at least one benefit.'
+        );
     }
 
-    private static void validateAmountOfPolicies(Integer amountOfPolicies) {
-        if (amountOfPolicies != null && amountOfPolicies < 1) {
-            throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'amount_of_policies must be a positive integer.');
-        }
+    if (benefitCount != null && benefitCount > MAX_BENEFITS) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            fieldName + ' cannot contain more than ' + MAX_BENEFITS + ' benefits.'
+        );
+    }
+}
+
+private static void validateAmountOfPolicies(Integer amountOfPolicies) {
+    if (amountOfPolicies != null && amountOfPolicies < 1) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            'amount_of_policies must be a positive integer.'
+        );
+    }
+}
+
+private static void validateCompleteRequest(ServiceContract contract) {
+    validateRequiredCompleteFields(contract);
+    validateDates(contract.StartDate, contract.EndDate);
+    validateCoreLineItemExists(contract.ContractLineItems);
+}
+
+private static void validateRequiredCompleteFields(ServiceContract contract) {
+    if (String.isBlank(contract.Product_Reference__c)) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            'product_reference is required to complete the benefit package.'
+        );
     }
 
-    private static void validateCompleteRequest(ServiceContract contract) {
-        validateCompleteFields(contract);
-        validateDates(contract.StartDate, contract.EndDate);
-        validateCoreLineItemExists(contract.ContractLineItems);
+    if (contract.Amount_of_Policies__c == null) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            'amount_of_policies is required to complete the benefit package.'
+        );
     }
 
-    private static void validateCompleteFields(ServiceContract contract) {
-        validateRequiredField(contract.Product_Reference__c, 'product_reference');
-        validateRequiredField(contract.Amount_of_Policies__c, 'amount_of_policies');
-        validateRequiredField(contract.StartDate, 'active_start_at');
-        validateRequiredField(contract.EndDate, 'active_end_at');
-        validateRequiredField(contract.Policy_Range_Start__c, 'affected_policy_range.external_number_start_at');
-        validateRequiredField(contract.Policy_Range_End__c, 'affected_policy_range.external_number_end_at');
-
-        validateAmountOfPolicies(Integer.valueOf(contract.Amount_of_Policies__c));
+    if (contract.StartDate == null) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            'active_start_at is required to complete the benefit package.'
+        );
     }
 
-    private static void validateRequiredField(Object value, String fieldName) {
-        if (value == null || (value instanceof String && String.isBlank((String)value))) {
-            throw new WebportalApiUtility_v1.RequestAPIException(
-                400, 'bad_request', fieldName + ' is required to complete the benefit package.'
-            );
-        }
+    if (contract.EndDate == null) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            'active_end_at is required to complete the benefit package.'
+        );
     }
 
-    private static void validateCoreLineItemExists(List<ContractLineItem> lineItems) {
+    if (String.isBlank(contract.Policy_Range_Start__c)) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            'affected_policy_range.external_number_start_at is required to complete the benefit package.'
+        );
+    }
+
+    if (String.isBlank(contract.Policy_Range_End__c)) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            'affected_policy_range.external_number_end_at is required to complete the benefit package.'
+        );
+    }
+
+    validateAmountOfPolicies(Integer.valueOf(contract.Amount_of_Policies__c));
+}
+
+private static void validateCoreLineItemExists(List<ContractLineItem> lineItems) {
+    if (lineItems != null) {
         for (ContractLineItem lineItem : lineItems) {
             if (lineItem.Benefit_Category__c == CATEGORY_CORE) {
                 return;
             }
         }
-        throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'At least one Core benefit is required to complete the benefit package.');
-    } 
-
-    private static void applyPolicyRangePatch(ServiceContract contract, BenefitPackage request) {
-        WebportalApiUtility_v1.runValidateRequiredFields(JSON.serialize(request.affected_policy_range), UPDATE_REQUIRED_FIELDS);
-
-        contract.Policy_Range_Start__c = request.affected_policy_range.external_number_start_at;
-        contract.Policy_Range_End__c = request.affected_policy_range.external_number_end_at;
-    }    
-
-    private static void validateBenefits(Integer benefitCount, String fieldName, Boolean required) {
-        if (required && (benefitCount == null || benefitCount == 0)) {
-            throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', fieldName + ' must contain at least one benefit.');
-        }
-
-        if (benefitCount != null && benefitCount > MAX_BENEFITS) {
-            throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', fieldName + ' cannot contain more than ' + MAX_BENEFITS + ' benefits.'
-            );
-        }
     }
 
-    private static void validateDates(Date startDate, Date endDate) {
-        if (startDate == null) {
-            throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'active_start_at is required.');
-        }
-        if (endDate == null) {
-            throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'active_end_at is required.');
-        }
-        if (endDate <= startDate) {
-            throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'active_end_at must be greater than active_start_at.');
-        }
+    throw new WebportalApiUtility_v1.RequestAPIException(
+        400,
+        'bad_request',
+        'At least one Core benefit is required to complete the benefit package.'
+    );
+}
+
+private static void validateDates(Date startDate, Date endDate) {
+    if (startDate == null) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            'active_start_at is required.'
+        );
     }
 
-    private static void validateDraftStatus(ServiceContract contract, String operation) {
-        if (contract.Package_Status__c != 'Draft') {
-            throw new WebportalApiUtility_v1.RequestAPIException(
-                400, 'bad_request', 'Benefit package cannot be ' + operation + ' because its current status is ' + contract.Package_Status__c + '.'
-            );
-        }
+    if (endDate == null) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            'active_end_at is required.'
+        );
     }
 
-    private static Map<String, Integer> validateGetRequest(Map<String, String> requestParams) {
-        Map<String, Integer> paginationParams = WebportalApiUtility_v1.validatePaginationQueryParams(requestParams, 100);
-        
-        if (paginationParams.get('start_index') > 2000) {
-            throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'start_index cannot be greater than 2000.');
-        }
-
-        return paginationParams;
+    if (endDate <= startDate) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            'active_end_at must be greater than active_start_at.'
+        );
     }
+}
+
+private static void validateDraftStatus(ServiceContract contract, String operation) {
+    if (contract.Package_Status__c != 'Draft') {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            'Benefit package cannot be ' + operation +
+            ' because its current status is ' + contract.Package_Status__c + '.'
+        );
+    }
+}
+
+private static void applyPolicyRangePatch(ServiceContract contract, BenefitPackage request) {
+    WebportalApiUtility_v1.runValidateRequiredFields(
+        JSON.serialize(request.affected_policy_range),
+        POLICY_RANGE_REQUIRED_FIELDS
+    );
+
+    contract.Policy_Range_Start__c = request.affected_policy_range.external_number_start_at;
+    contract.Policy_Range_End__c = request.affected_policy_range.external_number_end_at;
+}
+
+private static Map<String, Integer> validateGetRequest(Map<String, String> requestParams) {
+    Map<String, Integer> paginationParams =
+        WebportalApiUtility_v1.validatePaginationQueryParams(
+            requestParams,
+            MAX_PAGINATION_RESULTS
+        );
+
+    if (paginationParams.get('start_index') > MAX_OFFSET) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            'start_index cannot be greater than ' + MAX_OFFSET + '.'
+        );
+    }
+
+    return paginationParams;
+}
