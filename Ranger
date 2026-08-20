@@ -1,0 +1,13 @@
+    public static String getContentRangeHeader(Integer rangeStart, Integer rangeEnd, Integer size) {
+        String contentRange;
+
+        if(rangeEnd == 0) {
+            contentRange = '0-0/' + String.valueOf(size);
+        } else if(size > rangeEnd) {
+            contentRange = String.valueOf(rangeStart + '-' +  (rangeStart + rangeEnd - 1) + '/' + size); 
+        } else {
+            contentRange = String.valueOf(rangeStart + '-' + (size - 1) + '/' + size);
+        }
+
+        return contentRange;
+    }
