@@ -1,0 +1,172 @@
+private static void handlePatch(String benefitPackageId) {
+    Savepoint sp = Database.setSavepoint();
+    try {
+        WebportalAPITokenAuthentication_v1.parseAndValidateSecurityToken(
+            RestContext.request,
+            new Set<String>{
+                'urn:axa.partners.sales.enterprise.transversal.benefits_configuration.benefit_packages.write',
+                'urn:axa.partners.benefits_platform.write'
+            }
+        );
+
+        String requestBody = RestContext.request.requestBody == null
+            ? null
+            : RestContext.request.requestBody.toString().trim();
+
+        if (String.isBlank(requestBody)) {
+            throw new WebportalApiUtility_v1.RequestAPIException(
+                400, 'bad_request', 'Request body cannot be empty.'
+            );
+        }
+
+        Map<String, Object> rawBody =
+            (Map<String, Object>) JSON.deserializeUntyped(requestBody);
+        Map<String, Object> body =
+            (Map<String, Object>) sanitizeJsonValue(rawBody); // ver item 3
+
+        BenefitPackage request =
+            (BenefitPackage) JSON.deserializeStrict(
+                JSON.serialize(body),
+                BenefitPackage.class
+            );
+
+        ServiceContract contract = getBenefitPackage(benefitPackageId); // ver item 4 (FOR UPDATE)
+
+        validateDraftStatus(contract, 'updated');
+        validatePatchRequest(request, body, contract);
+
+        // Fase A: só popula campos simples no objeto em memória, SEM DML
+        stageContractFieldChanges(contract, request, body);
+
+        // Fase B: persiste os campos do contrato primeiro
+        update contract;
+
+        // Fase C: só agora mexe nas line items (depende do contrato já salvo)
+        if (body.containsKey('core_benefits') || body.containsKey('optional_benefits')) {
+            replaceBenefitLines(contract, request, body);
+        }
+
+        RestContext.response.statusCode = 204;
+        RestContext.response.responseBody = null;
+
+    } catch (WebportalApiUtility_v1.RequestAPIException ex) {
+        Database.rollback(sp);
+        RestContext.response.statusCode = ex.status_code;
+        RestContext.response.responseBody = Blob.valueOf(
+            JSON.serializePretty(
+                new WebportalApiUtility_v1.ErrorMessage(
+                    String.valueOf(ex.status_code), ex.error, ex.error_description
+                ), true
+            )
+        );
+    } catch (JSONException ex) {
+        Database.rollback(sp);
+        System.debug(LoggingLevel.ERROR, 'JSONException: ' + ex.getMessage()); // item 7
+        System.debug(LoggingLevel.ERROR, 'JSONException stack trace: ' + ex.getStackTraceString());
+
+        RestContext.response.statusCode = 400;
+        RestContext.response.responseBody = Blob.valueOf(
+            JSON.serializePretty(
+                new WebportalApiUtility_v1.ErrorMessage(
+                    '400', 'Bad Request',
+                    'The input information received were not compliant with the endpoint specification.'
+                )
+            )
+        );
+    } catch (DMLException ex) {
+        Database.rollback(sp);
+        System.debug(LoggingLevel.ERROR, 'DMLException: ' + ex.getMessage());
+        System.debug(LoggingLevel.ERROR, 'DMLException stack trace: ' + ex.getStackTraceString());
+
+        RestContext.response.statusCode = 500;
+        RestContext.response.responseBody = Blob.valueOf(
+            JSON.serializePretty(
+                new WebportalApiUtility_v1.ErrorMessage(
+                    '500', 'database_internal_server_error',
+                    'Error when try to update benefit package.'
+                )
+            )
+        );
+    } catch (Exception ex) {
+        Database.rollback(sp);
+        System.debug(LoggingLevel.ERROR, 'Exception type: ' + ex.getTypeName());
+        System.debug(LoggingLevel.ERROR, 'Exception stack tracing: ' + ex.getStackTraceString());
+
+        RestContext.response.statusCode = 500;
+        RestContext.response.responseBody = Blob.valueOf(
+            JSON.serializePretty(
+                new WebportalApiUtility_v1.ErrorMessage(
+                    '500', 'Internal Server Error',
+                    'Unexpected error updating the benefit package.'
+                )
+            )
+        );
+    }
+}
+
+private static void stageContractFieldChanges(
+    ServiceContract contract,
+    BenefitPackage request,
+    Map<String, Object> body
+) {
+    if (body.containsKey('product_reference')) {
+        Product__c product = getProduct(request.product_reference);
+        contract.Product_Reference__c = request.product_reference;
+        contract.Product__c = product.Id;
+    }
+
+    if (body.containsKey('active_start_at')) {
+        contract.StartDate = normalizeStartDate(request.active_start_at);
+    }
+
+    if (body.containsKey('active_end_at')) {
+        contract.EndDate = request.active_end_at;
+    }
+
+    if (body.containsKey('active_start_at') || body.containsKey('active_end_at')) {
+        contract.Term = calculateWholeMonthTerm(contract.StartDate, contract.EndDate);
+    }
+
+    if (body.containsKey('amount_of_policies')) {
+        contract.Amount_of_Policies__c = request.amount_of_policies;
+    }
+
+    if (body.containsKey('affected_policy_range')) {
+        applyPolicyRangePatch(contract, request);
+    }
+}
+
+private static void validatePolicyRangePatch(BenefitPackage request) {
+    if (request.affected_policy_range == null) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            'affected_policy_range cannot be null.'
+        );
+    }
+
+    WebportalApiUtility_v1.runValidateRequiredFields(
+        JSON.serialize(request.affected_policy_range),
+        POLICY_RANGE_REQUIRED_FIELDS
+    );
+}
+
+SELECT Id, StartDate, EndDate, ...
+FROM ServiceContract
+WHERE Id = :benefitPackageId
+LIMIT 1
+FOR UPDATE
+
+private static void validateBenefits(
+    Integer size,
+    String fieldName,
+    Boolean required
+) {
+    if (required && (size == null || size == 0)) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            fieldName + ' must contain at least one item.'
+        );
+    }
+}
