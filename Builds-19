@@ -1,0 +1,292 @@
+private static ServiceContract buildServiceContract(
+    BenefitPackage request,
+    Product__c product,
+    Id pricebookId,
+    Date startDate,
+    Date endDate
+) {
+    ServiceContract contract = new ServiceContract();
+
+    contract.Name = '-';
+
+    contract.RecordTypeId =
+        Schema.SObjectType.ServiceContract
+            .getRecordTypeInfosByDeveloperName()
+            .get(BENEFIT_PACKAGE_RECORD_TYPE)
+            .getRecordTypeId();
+
+    contract.Pricebook2Id = pricebookId;
+    contract.Package_Status__c = PACKAGE_STATUS.get('DRAFT');
+
+    contract.Product_Reference__c = request.product_reference;
+    contract.Product__c = product.Id;
+
+    contract.StartDate = startDate;
+    contract.EndDate = endDate;
+    contract.Term = calculateWholeMonthTerm(startDate, endDate);
+
+    contract.Amount_of_Policies__c = request.amount_of_policies;
+
+    contract.Policy_Range_Start__c =
+        request.affected_policy_range.external_number_start_at;
+
+    contract.Policy_Range_End__c =
+        request.affected_policy_range.external_number_end_at;
+
+    populateLegalConsents(contract, request);
+
+    return contract;
+}
+
+
+private static List<ContractLineItem> buildContractLineItems(
+    Id contractId,
+    BenefitPackage request,
+    Date startDate,
+    Date endDate,
+    Map<String, Benefit__c> benefitsByReference,
+    Map<String, PricebookEntry> pricebookEntriesByBenefit
+) {
+    List<ContractLineItem> lineItems = new List<ContractLineItem>();
+
+    Integer quantity = request.amount_of_policies;
+
+    // Core benefits
+    for (CoreBenefit coreBenefit : request.core_benefits) {
+
+        Benefit__c benefit =
+            benefitsByReference.get(coreBenefit.benefit_id);
+
+        PricebookEntry pricebookEntry =
+            pricebookEntriesByBenefit.get(coreBenefit.benefit_id);
+
+        lineItems.add(
+            buildContractLineItem(
+                contractId,
+                quantity,
+                startDate,
+                endDate,
+                benefit,
+                pricebookEntry,
+                'Core',
+                0
+            )
+        );
+    }
+
+    // Optional benefits
+    if (request.optional_benefits != null) {
+
+        for (OptionalBenefit optionalBenefit : request.optional_benefits) {
+
+            Benefit__c benefit =
+                benefitsByReference.get(optionalBenefit.benefit_id);
+
+            PricebookEntry pricebookEntry =
+                pricebookEntriesByBenefit.get(optionalBenefit.benefit_id);
+
+            lineItems.add(
+                buildContractLineItem(
+                    contractId,
+                    quantity,
+                    startDate,
+                    endDate,
+                    benefit,
+                    pricebookEntry,
+                    'Optional',
+                    pricebookEntry.UnitPrice
+                )
+            );
+        }
+    }
+
+    return lineItems;
+}
+
+
+private static ContractLineItem buildContractLineItem(
+    Id contractId,
+    Integer quantity,
+    Date startDate,
+    Date endDate,
+    Benefit__c benefit,
+    PricebookEntry pricebookEntry,
+    String category,
+    Decimal unitPrice
+) {
+    if (benefit == null) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            'Benefit could not be resolved.'
+        );
+    }
+
+    if (pricebookEntry == null) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            'No PricebookEntry was found for benefit ' + benefit.Name + '.'
+        );
+    }
+
+    return new ContractLineItem(
+        ServiceContractId = contractId,
+        PricebookEntryId = pricebookEntry.Id,
+        Benefit_Category__c = category,
+        Quantity = quantity,
+        UnitPrice = unitPrice,
+        StartDate = startDate,
+        EndDate = endDate
+    );
+}
+
+private static BenefitPackage buildBenefitPackageResponse(
+    ServiceContract contract,
+    List<ContractLineItem> lineItems
+) {
+    BenefitPackage response =
+        initializeBenefitPackageResponse(contract);
+
+    for (ContractLineItem lineItem : lineItems) {
+
+        if (lineItem.Benefit_Category__c == 'Core') {
+            response.core_benefits.add(
+                buildCoreBenefit(lineItem)
+            );
+
+        } else if (lineItem.Benefit_Category__c == 'Optional') {
+            response.optional_benefits.add(
+                buildOptionalBenefit(lineItem)
+            );
+        }
+    }
+
+    return response;
+}
+
+
+private static BenefitPackage initializeBenefitPackageResponse(
+    ServiceContract contract
+) {
+    BenefitPackage response = new BenefitPackage();
+
+    response.status = contract.Package_Status__c;
+    response.benefit_package_id = contract.Id;
+    response.product_reference = contract.Product_Reference__c;
+    response.active_start_at = contract.StartDate;
+    response.active_end_at = contract.EndDate;
+
+    response.amount_of_policies =
+        contract.Amount_of_Policies__c == null
+            ? null
+            : Integer.valueOf(contract.Amount_of_Policies__c);
+
+    response.affected_policy_range =
+        buildAffectedPolicyRange(contract);
+
+    response.core_benefits = new List<CoreBenefit>();
+    response.optional_benefits = new List<OptionalBenefit>();
+
+    response.legal_consents =
+        buildLegalConsentResponse(contract);
+
+    return response;
+}
+
+
+private static AffectedPolicyRange buildAffectedPolicyRange(
+    ServiceContract contract
+) {
+    AffectedPolicyRange policyRange =
+        new AffectedPolicyRange();
+
+    policyRange.external_number_start_at =
+        contract.Policy_Range_Start__c;
+
+    policyRange.external_number_end_at =
+        contract.Policy_Range_End__c;
+
+    return policyRange;
+}
+
+
+private static CoreBenefit buildCoreBenefit(
+    ContractLineItem lineItem
+) {
+    CoreBenefit coreBenefit = new CoreBenefit();
+
+    coreBenefit.benefit_id =
+        lineItem.PricebookEntry
+            .Product2
+            .Benefit__r
+            .Visa_External_Reference__c;
+
+    coreBenefit.name =
+        lineItem.PricebookEntry
+            .Product2
+            .Benefit__r
+            .Name;
+
+    return coreBenefit;
+}
+
+
+private static OptionalBenefit buildOptionalBenefit(
+    ContractLineItem lineItem
+) {
+    OptionalBenefit optionalBenefit =
+        new OptionalBenefit();
+
+    optionalBenefit.benefit_id =
+        lineItem.PricebookEntry
+            .Product2
+            .Benefit__r
+            .Visa_External_Reference__c;
+
+    optionalBenefit.name =
+        lineItem.PricebookEntry
+            .Product2
+            .Benefit__r
+            .Name;
+
+    optionalBenefit.description =
+        lineItem.PricebookEntry
+            .Product2
+            .Benefit__r
+            .Benefit_Description__c;
+
+    return optionalBenefit;
+}
+
+
+private static List<LegalConsentItem> buildLegalConsentResponse(
+    ServiceContract contract
+) {
+    List<LegalConsentItem> legalConsents =
+        new List<LegalConsentItem>();
+
+    if (String.isBlank(contract.Legal_Consent_Code__c)) {
+        return legalConsents;
+    }
+
+    LegalConsentItem consent =
+        new LegalConsentItem();
+
+    consent.code =
+        contract.Legal_Consent_Code__c;
+
+    consent.is_confirmed =
+        contract.Legal_Consent_Confirmed__c;
+
+    consent.consented_at =
+        contract.Legal_Consent_Date__c == null
+            ? null
+            : contract.Legal_Consent_Date__c.formatGmt(
+                'yyyy-MM-dd\'T\'HH:mm:ss\'Z\''
+            );
+
+    legalConsents.add(consent);
+
+    return legalConsents;
+}
