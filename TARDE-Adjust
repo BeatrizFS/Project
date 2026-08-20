@@ -1,26 +1,32 @@
-private static void validateCompleteRequest(ServiceContract contract) {
-    validateCompleteFields(contract);
-    validateDates(contract.StartDate, contract.EndDate);
-    validateCoreLineItemExists(contract.ContractLineItems);
-}
+    private static void validateCoreBenefits(List<CoreBenefit> benefits, Boolean required) {
+        if (required && (benefits == null || benefits.isEmpty())) {
+            throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'core_benefits must contain at least one benefit.');
+        }
 
-private static void validateCompleteFields(ServiceContract contract) {
-    validateRequiredField(contract.Product_Reference__c, 'product_reference');
-    validateRequiredField(contract.Amount_of_Policies__c, 'amount_of_policies');
-    validateRequiredField(contract.StartDate, 'active_start_at');
-    validateRequiredField(contract.EndDate, 'active_end_at');
-    validateRequiredField(contract.Policy_Range_Start__c, 'affected_policy_range.external_number_start_at');
-    validateRequiredField(contract.Policy_Range_End__c, 'affected_policy_range.external_number_end_at');
-
-    validateAmountOfPolicies(Integer.valueOf(contract.Amount_of_Policies__c));
-}
-
-private static void validateRequiredField(Object value, String fieldName) {
-    if (value == null || (value instanceof String && String.isBlank((String)value))) {
-        throw new WebportalApiUtility_v1.RequestAPIException(
-            400,
-            'bad_request',
-            fieldName + ' is required to complete the benefit package.'
-        );
+        if (benefits != null && benefits.size() > MAX_BENEFITS) {
+            throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'core_benefits cannot contain more than ' + MAX_BENEFITS + ' benefits.');
+        }
     }
-}
+
+    private static void validateOptionalBenefits(List<OptionalBenefit> benefits) {
+        if (benefits != null && benefits.size() > MAX_BENEFITS) {
+            throw new WebportalApiUtility_v1.RequestAPIException(
+                400, 'bad_request', 'optional_benefits cannot contain more than ' + MAX_BENEFITS + ' benefits.'
+            );
+        }
+    }
+
+    private static void validateBenefitReplacementRequest(BenefitPackage request, Boolean replaceCore, Boolean replaceOptional) {
+        if (replaceCore) {
+            validateCoreBenefits(request.core_benefits, true);
+        }
+
+        if (replaceOptional) {
+            if (request.optional_benefits == null || request.optional_benefits.isEmpty()) {
+                throw new WebportalApiUtility_v1.RequestAPIException(400, 'bad_request', 'optional_benefits must contain at least one benefit.');
+            }
+            validateOptionalBenefits(
+                request.optional_benefits
+            );
+        }
+    }
