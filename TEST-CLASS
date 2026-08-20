@@ -1,18 +1,9 @@
-private static void validatePolicyRange(BenefitPackage request) {
-    if (request.affected_policy_range == null) {
-        throw new WebportalApiUtility_v1.RequestAPIException(
-            400,
-            'bad_request',
-            'affected_policy_range cannot be null.'
-        );
-    }
+11. PATCH /benefit_packages/{benefit_package_id} — update
+Response 204 with no body.
 
-    Map<String, Object> policyRangeBody = new Map<String, Object>{
-        'affected_policy_range' => request.affected_policy_range
-    };
-
-    WebportalApiUtility_v1.runValidateRequiredFields(
-        JSON.serialize(policyRangeBody),
-        POLICY_RANGE_REQUIRED_FIELDS
-    );
-}
+Accepted only when Package_Status__c = 'Draft'. Any other status yields 400 bad_request with an error description naming the current status. 403 is not used here: the caller holds the right scope and the right bank, the resource state is what forbids the operation.
+Attributes present in the body are applied; absent attributes are left untouched.
+core_benefits and optional_benefits, when present, replace the corresponding lines entirely: the existing lines of that category are deleted and the submitted set is inserted. Merge semantics were discarded because the contract offers no removal operation, so a merge would make it impossible to deselect a benefit the agent had previously chosen — the New package flow lets an agent toggle optional benefits freely.
+Sending an empty array is a rejection, not a clearing: the contract declares minItems: 1 for both collections. Clearing every core benefit would produce a package that can never be completed.
+benefit_package_id and status in the body are ignored; both are readOnly.
+Delete plus insert of the lines runs in the same transaction as the header update. Where a package carries the contract maximum of 100 core and 100 optional benefits, a full replacement is 200 rows deleted and 200 inserted — well inside DML row limits, and the reason the operation stays synchronous.
