@@ -1,79 +1,26 @@
-    //Improvement
-    private static void validateDates(Date startDate, Date endDate) {
-        WebportalApiUtility_v1.isValidDate(startDate, 'active_start_at');
-        WebportalApiUtility_v1.isValidDate(endDate, 'active_end_at');
-        if (endDate <= startDate) {
-            throw new WebportalApiUtility_v1.RequestAPIException(
-                400, 'bad_request', 'active_end_at must be greater than active_start_at.'
-            );
-        }
+private static void validateDates(Date startDate, Date endDate) {
+
+    if (startDate == null) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            'active_start_at is required.'
+        );
     }
 
-    public static Boolean isValidDate(String dateValue) {
-        Set<Integer> monthsWith30Days = new Set<Integer>{4, 6, 9, 11};
-        Set<Integer> monthsWith31Days = new Set<Integer>{1, 3, 5, 7, 8, 10, 11, 12};
-
-        String regexDate = '^\\d{4}\\-(0[1-9]|1[012])\\-(0[1-9]|[12][0-9]|3[01])$';
-        Matcher match = Pattern.compile(regexDate).matcher(dateValue);
-
-        if(match.matches()) {
-            List<String> dateParts = dateValue.split('-');
-
-            if(Integer.valueOf(dateParts[1]) == 2) {
-                if ((Date.isLeapYear(Integer.valueOf(dateParts[0])) && Integer.valueOf(dateParts[2]) <= 29) || (!Date.isLeapYear(Integer.valueOf(dateParts[0])) && Integer.valueOf(dateParts[2]) <= 28)) {
-                    return true;
-                } else {
-                    return false;
-                }
-            } else {
-                if ((monthsWith30Days.contains(Integer.valueOf(dateParts[1])) && Integer.valueOf(dateParts[2]) <= 30) || (monthsWith31Days.contains(Integer.valueOf(dateParts[1])) && Integer.valueOf(dateParts[2]) <= 31)) {
-                    return true;
-                } else {
-                    return false;
-                }
-            }
-        } else {
-            return false;
-        }
+    if (endDate == null) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            'active_end_at is required.'
+        );
     }
 
-    public static Boolean isValidUTCDatetime(String datetimeUTC) {
-        Boolean isValidUTCRegex = false;
-        if(isValidDate(datetimeUTC.substringBefore('T'))) {
-            String regexUTC = '([01]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]';
-            if(datetimeUTC.contains('Z')) {
-                regexUTC += 'Z';
-            } else {
-                regexUTC += '([-]{1}(0{1}[0-9]{1}|1{1}[0|1|2|3])|[+]{1}(0{1}[0-9]{1}|1{1}[0|1|2|3])):00';
-            }
-
-            Matcher match = Pattern.compile(regexUTC).matcher(datetimeUTC.substringAfter('T'));
-            isValidUTCRegex = match.matches();
-        }
-
-        return isValidUTCRegex;
+    if (endDate <= startDate) {
+        throw new WebportalApiUtility_v1.RequestAPIException(
+            400,
+            'bad_request',
+            'active_end_at must be greater than active_start_at.'
+        );
     }
-
-    public static Boolean isValidPicklistValue( Schema.DescribeFieldResult picklistField, String value ) {
-        Boolean result = false;
-        if( String.isNotBlank( value ) ) {
-            for( Schema.PicklistEntry ple : picklistField.getPicklistValues() ) {
-                if( ple.value == value ) {
-                    result = true;
-                }
-            }
-        }
-        return result;
-    }
-
-    public static String isValidPicklistValues(Schema.DescribeFieldResult picklistField, List<String> values) {
-        String invalidPicklistValues = '';
-
-        for(String value : values) {
-            if(!isValidPicklistValue(picklistField, value)) {
-                invalidPicklistValues += value + ', ';
-            }
-        }
-
-        return invalidPicklistValues.removeEnd(', ');
-    }
+}
